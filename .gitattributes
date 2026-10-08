@@ -1,0 +1,3 @@
+# Check every file out exactly as stored (no line-ending conversion), so a build of this source
+# is byte-identical to the official APK on every OS. See tools/verify-apk.py.
+* -text
