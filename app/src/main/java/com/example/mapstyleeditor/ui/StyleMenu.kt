@@ -1,5 +1,8 @@
 package com.example.mapstyleeditor.ui
 
+import com.example.mapstyleeditor.update.AppUpdates
+import androidx.compose.runtime.collectAsState
+import androidx.compose.foundation.background
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -114,6 +117,18 @@ fun StyleMenu(
             contentAlignment = Alignment.Center,
         ) {
             MenuGlyph(ink, closeness = reveal)
+        }
+        // A dot on the button while an update is waiting (see the Updates tab).
+        val update by AppUpdates.state.collectAsState()
+        if (update.available && !open) {
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = MARGIN + 4.dp, end = MARGIN + 4.dp)
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFE5484D)),
+            )
         }
     }
 }

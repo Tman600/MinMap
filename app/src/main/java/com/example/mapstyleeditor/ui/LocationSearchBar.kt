@@ -53,14 +53,12 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.HazeColorEffect
 import dev.chrisbanes.haze.blur.hazeBlur
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
-import java.net.URLEncoder
+import com.example.mapstyleeditor.places.PlaceSearch
+import com.example.mapstyleeditor.places.SearchHit
+import com.example.mapstyleeditor.places.formatDistance
+import com.mapbox.geojson.Point
 
 /** A search result: what to show in the list and where to move the camera. */
 data class Place(val name: String, val detail: String, val longitude: Double, val latitude: Double)
@@ -85,15 +83,22 @@ fun LocationSearchBar(
     /** Learned "you usually go here around now" places, shown while the bar is empty. */
     suggestions: List<SuggestedDrive>,
     onForgetSuggestion: (Place) -> Unit,
+    /** Where the map is looking, so results near it come first. */
+    near: () -> Point?,
+    /** Where you are, for the distances shown. */
+    here: () -> Point?,
     modifier: Modifier = Modifier,
 ) {
     var query by remember { mutableStateOf("") }
-    var results by remember { mutableStateOf<List<Place>>(emptyList()) }
+    var results by remember { mutableStateOf<List<SearchHit>>(emptyList()) }
     var showResults by remember { mutableStateOf(false) }
+    /** The category being listed ("Coffee Shop"), while the list shows its nearby places. */
+    var browsing by remember { mutableStateOf<String?>(null) }
     /** The place the map last flew to; offers to drive there until the search changes. */
     var picked by remember { mutableStateOf<Place?>(null) }
     val focus = LocalFocusManager.current
     val scope = rememberCoroutineScope()
+    val search = remember(accessToken) { PlaceSearch(accessToken) }
 
     // Search as the user types, but only once they pause, so we don't fire a request per keystroke.
     LaunchedEffect(query) {
@@ -101,16 +106,34 @@ fun LocationSearchBar(
             results = emptyList()
             return@LaunchedEffect
         }
+        if (query == browsing) return@LaunchedEffect
+        browsing = null
         delay(350)
-        results = geocode(query, accessToken)
+        results = search.suggest(query, near(), here())
     }
 
-    fun pick(place: Place) {
+    fun show(place: Place) {
         query = place.name
         picked = place
         showResults = false
+        browsing = null
         focus.clearFocus()
         onPlace(place)
+    }
+
+    // A category opens into its nearest places; anything else is looked up and flown to.
+    fun pick(hit: SearchHit) {
+        scope.launch {
+            val category = hit.category
+            if (category != null) {
+                browsing = hit.name
+                query = hit.name
+                results = search.category(category, near(), here())
+                showResults = true
+            } else {
+                search.open(hit)?.let(::show)
+            }
+        }
     }
 
     // The map underneath decides whether light or dark glass reads better.
@@ -137,23 +160,29 @@ fun LocationSearchBar(
                     .verticalScroll(rememberScrollState())
                     .padding(vertical = 6.dp),
             ) {
-                results.forEach { place ->
-                    Column(
+                results.forEach { hit ->
+                    Row(
                         Modifier
                             .fillMaxWidth()
-                            .clickable { pick(place) }
+                            .clickable { pick(hit) }
                             .padding(horizontal = 18.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(place.name, color = ink, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (place.detail.isNotEmpty()) {
-                            Text(
-                                place.detail,
-                                color = ink.copy(alpha = 0.65f),
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                        Column(Modifier.weight(1f)) {
+                            Text(hit.name, color = ink, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            val detail = listOfNotNull(hit.distance?.let(::formatDistance), hit.detail.ifBlank { null })
+                            if (detail.isNotEmpty()) {
+                                Text(
+                                    detail.joinToString(" · "),
+                                    color = ink.copy(alpha = 0.65f),
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
+                        // A category opens into a list rather than going straight to the map.
+                        if (hit.category != null) Text("›", color = ink.copy(alpha = 0.5f), fontSize = 18.sp)
                     }
                 }
             }
@@ -222,7 +251,7 @@ fun LocationSearchBar(
                     keyboardActions = KeyboardActions(onSearch = {
                         scope.launch {
                             // Use the latest suggestions, or search right away if the pause hasn't passed yet.
-                            val list = results.ifEmpty { geocode(query, accessToken) }
+                            val list = results.ifEmpty { search.suggest(query, near(), here()) }
                             list.firstOrNull()?.let(::pick)
                         }
                     }),
@@ -266,6 +295,7 @@ fun LocationSearchBar(
                         .clickable {
                             query = ""
                             picked = null
+                            browsing = null
                             showResults = false
                         },
                     contentAlignment = Alignment.Center,
@@ -302,34 +332,3 @@ private fun SearchGlyph(color: Color) {
     }
 }
 
-/** Mapbox Geocoding v6 forward search, biased toward the user's rough location. Empty on any failure. */
-private suspend fun geocode(query: String, accessToken: String): List<Place> = withContext(Dispatchers.IO) {
-    runCatching {
-        val url = URL(
-            "https://api.mapbox.com/search/geocode/v6/forward" +
-                "?q=${URLEncoder.encode(query.trim(), "UTF-8")}&limit=5&proximity=ip&access_token=$accessToken",
-        )
-        val body = (url.openConnection() as HttpURLConnection).run {
-            connectTimeout = 8000
-            readTimeout = 8000
-            try {
-                if (responseCode != HttpURLConnection.HTTP_OK) return@runCatching emptyList()
-                inputStream.bufferedReader().use { it.readText() }
-            } finally {
-                disconnect()
-            }
-        }
-        val features = JSONObject(body).getJSONArray("features")
-        (0 until features.length()).mapNotNull { i ->
-            val feature = features.getJSONObject(i)
-            val props = feature.getJSONObject("properties")
-            val coords = feature.optJSONObject("geometry")?.optJSONArray("coordinates") ?: return@mapNotNull null
-            Place(
-                name = props.optString("name"),
-                detail = props.optString("place_formatted"),
-                longitude = coords.getDouble(0),
-                latitude = coords.getDouble(1),
-            )
-        }
-    }.getOrDefault(emptyList())
-}

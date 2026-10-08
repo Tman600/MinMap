@@ -1,0 +1,13 @@
+The 3D models in this folder are from munim-maps-vehicles 0.5.0 by Munim, Inc.
+(https://github.com/munimtechnologies/munim-maps), licensed under the Apache License 2.0
+(see LICENSE-munim-maps-vehicles.txt).
+
+Changes made for MinMap: rocket-starship.glb was split into booster.glb and ship.glb, and
+starbase-tower.glb into tower.glb, carriage.glb (the frame the chopsticks ride on),
+arm-left.glb and arm-right.glb (the chopstick arms) and qd-arm.glb (the ship quick-disconnect
+arm), each moved so its origin is the point it turns about, so the parts can be animated during
+a launch. starbase-mount.glb is unchanged (saved as mount.glb). The geometry and materials are
+otherwise as published.
+
+flame.glb, vapor.glb and steam.glb (exhaust, venting and deluge steam) are MinMap's own, generated
+for it, and are not part of munim-maps-vehicles.

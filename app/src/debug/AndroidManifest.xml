@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds only: lets the updater be tried against a test release listing served over plain
+     HTTP from the development machine (the update_feed extra; see MainActivity). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:usesCleartextTraffic="true" />
+</manifest>

@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Installs its own updates from GitHub releases (see AppUpdates). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Drive mode follows the driver's position on the map. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
@@ -43,6 +45,10 @@
         </activity>
 
         <!-- Reads Google Maps' turn-by-turn notification (only that one) for drive mode. -->
+        <receiver
+            android:name=".update.UpdateInstallReceiver"
+            android:exported="false" />
+
         <service
             android:name=".nav.GoogleNavListener"
             android:exported="true"

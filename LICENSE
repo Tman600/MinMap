@@ -18,6 +18,10 @@ Third-party material in this repository keeps its own license:
   - app/src/main/assets/robotaxi-service-areas.json: service-area data from Robotaxi Tracker
     (robotaxitracker.com), licensed under CC BY 4.0.
   - gradle/wrapper/: the Gradle Wrapper, licensed under the Apache License 2.0.
+  - app/src/main/assets/starbase/: Starbase and Starship 3D models from munim-maps-vehicles by
+    Munim, Inc., licensed under the Apache License 2.0 (split into moving parts for MinMap; see
+    NOTICE.txt there). The flame, vapor and steam models in that folder are MinMap's own and fall
+    under this license.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. IN NO EVENT
 SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM THE

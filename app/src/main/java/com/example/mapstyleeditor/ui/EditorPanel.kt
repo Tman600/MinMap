@@ -60,6 +60,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import com.example.mapstyleeditor.update.UpdatesPanel
 import com.example.mapstyleeditor.account.MapboxAccount
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -78,7 +79,7 @@ import com.example.mapstyleeditor.validateConfigJson
 import kotlin.math.roundToInt
 
 private enum class EditorTab(val title: String) {
-    PRESETS("Presets"), COLORS("Colors"), SHOW_HIDE("Show / Hide"), LIGHT("Light"), JSON("JSON"),
+    PRESETS("Presets"), COLORS("Colors"), SHOW_HIDE("Show / Hide"), LIGHT("Light"), JSON("JSON"), UPDATES("Updates"),
 }
 
 /** Approximate Mapbox Standard daytime colours, used to preview features the user hasn't recoloured yet. */
@@ -131,6 +132,7 @@ fun EditorContent(editor: EditorState, modifier: Modifier = Modifier) {
                 EditorTab.SHOW_HIDE -> ShowHideTab(editor)
                 EditorTab.LIGHT -> LightTab(editor)
                 EditorTab.JSON -> JsonTab(editor)
+                EditorTab.UPDATES -> UpdatesPanel(Modifier.fillMaxSize())
             }
         }
         MapboxAccountRow()
