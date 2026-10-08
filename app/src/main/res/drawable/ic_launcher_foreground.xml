@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- MinMap icon: a white map pin, centred in the adaptive-icon safe zone (on a black background). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:translateY="8">
+        <path
+            android:fillColor="#FFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M54,22c-9.4,0 -17,7.6 -17,17c0,12.8 17,31 17,31s17,-18.2 17,-31c0,-9.4 -7.6,-17 -17,-17zM54,45.5c-3.6,0 -6.5,-2.9 -6.5,-6.5s2.9,-6.5 6.5,-6.5s6.5,2.9 6.5,6.5s-2.9,6.5 -6.5,6.5z" />
+    </group>
+</vector>

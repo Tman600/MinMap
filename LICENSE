@@ -1,0 +1,24 @@
+MinMap
+Copyright (c) 2026 Tman600. All rights reserved.
+
+This source code is published so that anyone can read it and check that official MinMap
+releases are built from it. It is not open source, and no license to use it is granted
+beyond what is written here.
+
+You may:
+  - view and read the source code, and
+  - build it on your own computer only to check that it matches an official MinMap release.
+
+You may not, without prior written permission from the copyright holder:
+  - copy, modify, merge, translate or adapt the source code or any part of it;
+  - publish, distribute, sublicense, sell or share it or any build of it;
+  - use it, or any part of it, in another app, product or project.
+
+Third-party material in this repository keeps its own license:
+  - app/src/main/assets/robotaxi-service-areas.json: service-area data from Robotaxi Tracker
+    (robotaxitracker.com), licensed under CC BY 4.0.
+  - gradle/wrapper/: the Gradle Wrapper, licensed under the Apache License 2.0.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. IN NO EVENT
+SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM THE
+SOFTWARE OR ITS USE.
