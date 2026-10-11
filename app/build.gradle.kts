@@ -22,7 +22,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 9
-        versionName = "1.4"
+        versionName = "1.4.1"
     }
 
     // Also build a phone-only (arm64) APK next to the universal one. Mapbox's native engine is
