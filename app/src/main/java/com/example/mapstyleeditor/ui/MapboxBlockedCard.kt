@@ -104,6 +104,12 @@ fun MapboxBlockedCard(hazeState: HazeState, darkMap: Boolean, onUseAnotherAccoun
                 },
             )
             Text(
+                "Check again",
+                color = muted,
+                fontSize = 15.sp,
+                modifier = Modifier.clickable { MapboxUsage.confirm(force = true) },
+            )
+            Text(
                 "Switch account",
                 color = muted,
                 fontSize = 15.sp,

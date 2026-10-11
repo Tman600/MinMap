@@ -62,7 +62,8 @@ object MapboxAccount {
     private const val KEY_USER = "user"
 }
 
-private fun styleRefused(token: String): Boolean = runCatching {
+/** Whether Mapbox refuses [token] for the map's own style: true refused, false fine, null no answer. */
+internal fun styleRefused(token: String): Boolean? = runCatching {
     val conn = URL("https://api.mapbox.com/styles/v1/mapbox/standard?access_token=" + URLEncoder.encode(token, "UTF-8"))
         .openConnection() as HttpURLConnection
     try {
@@ -72,7 +73,7 @@ private fun styleRefused(token: String): Boolean = runCatching {
     } finally {
         conn.disconnect()
     }
-}.getOrDefault(false)
+}.getOrNull()
 
 sealed interface TokenCheck {
     data class Valid(val user: String) : TokenCheck
@@ -102,7 +103,7 @@ suspend fun checkToken(token: String): TokenCheck = withContext(Dispatchers.IO) 
     when (json?.optString("code")) {
         // A valid token can still be turned away everywhere: a demo-access account that has used up
         // its allowance. Loading the map style (which the map does first anyway) shows which.
-        "TokenValid" -> if (styleRefused(token)) {
+        "TokenValid" -> if (styleRefused(token) == true) {
             TokenCheck.Invalid(
                 "This Mapbox account has used up its free demo, so Mapbox won't send it maps. Add a card " +
                     "on Mapbox to make it a standard account: it's only charged beyond the free tier, which " +

@@ -11,7 +11,7 @@ From version 1.3, MinMap keeps itself up to date: the **Updates** tab in its set
 Each release lists the SHA-256 checksum of its APK, also in [`SHA256SUMS`](SHA256SUMS). The latest:
 
 ```
-01918e8336390430c439e6e63efaaabb55e5c70d22445dc3bc17778f9bd15f40  MinMap-1.4.apk
+b0d2a25b5c3caaa163ff4802fa322f6902ef58cb8cee33c936c883e5de0d062f  MinMap-1.4.apk
 ```
 
 Check it after downloading:

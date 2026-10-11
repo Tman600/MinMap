@@ -237,7 +237,11 @@ fun MapStyleEditorScreen(editor: EditorState, demo: DemoDrive? = null) {
     LaunchedEffect(Unit) {
         if (!hasLocation) askLocation.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { hasLocation = hasLocationPermission(context) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        hasLocation = hasLocationPermission(context)
+        // Back from adding a card on Mapbox (or anywhere else): see whether the panel still applies.
+        if (MapboxUsage.blocked) MapboxUsage.confirm(force = true)
+    }
     // Automatic update checks (and installs, if switched on) when the app comes to the front.
     val updateScope = rememberCoroutineScope()
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { updateScope.launch { AppUpdates.onAppResumed(context) } }
@@ -863,10 +867,7 @@ private fun StyledMap(
             val map = mapView.mapboxMap
             map.getStyle { defaultColors = readDefaultColors(map) }
             // Mapbox turning the token away (a demo account over its allowance) shows up here first.
-            map.subscribeMapLoadingError { error ->
-                val m = error.message
-                if ("401" in m || "403" in m || "Unauthorized" in m || "Not Authorized" in m) MapboxUsage.mapRefused()
-            }
+            map.subscribeMapLoadingError { error -> MapboxUsage.mapError(error.message) }
             trimmer.map = map
             mapView.location.addOnIndicatorPositionChangedListener {
                 live.point = it

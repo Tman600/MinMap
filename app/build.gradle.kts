@@ -21,7 +21,7 @@ android {
         applicationId = "app.minmap"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
+        versionCode = 9
         versionName = "1.4"
     }
 
