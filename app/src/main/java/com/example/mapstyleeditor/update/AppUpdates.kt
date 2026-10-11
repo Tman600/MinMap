@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
@@ -63,8 +64,16 @@ object AppUpdates {
     private val _state = MutableStateFlow(UpdateState())
     val state: StateFlow<UpdateState> = _state.asStateFlow()
 
-    /** Where releases are listed: GitHub's API for the repository (a debug build can point elsewhere). */
-    var feedUrl = "https://api.github.com/repos/Tman600/MinMap/releases/latest"
+    /**
+     * Where releases are listed: GitHub's API for the repository (a debug build can point elsewhere).
+     * The phone app reads the latest regular release; the aosp app reads only pre-releases, so the
+     * two builds ship separately and never see each other's APKs.
+     */
+    var feedUrl = if (BuildConfig.AOSP) {
+        "https://api.github.com/repos/Tman600/MinMap/releases?per_page=30"
+    } else {
+        "https://api.github.com/repos/Tman600/MinMap/releases/latest"
+    }
 
     fun prefs(context: Context) = context.getSharedPreferences("updates", Context.MODE_PRIVATE)
     fun autoCheck(context: Context) = prefs(context).getBoolean(KEY_AUTO_CHECK, true)
@@ -160,23 +169,22 @@ object AppUpdates {
     private suspend fun fetchLatest(): Release? = withContext(Dispatchers.IO) {
         noBuildForThisApp = false
         runCatching {
-            val json = JSONObject(httpText(feedUrl) ?: return@runCatching null)
-            val assets = json.getJSONArray("assets")
-            val all = (0 until assets.length()).map { assets.getJSONObject(it) }
-            // The phone build (arm64), not the larger universal one. The aosp build (its own app,
-            // "aosp" in the file name) takes the one for this device's CPU, else the universal one.
-            val apks = all.filter { val n = it.getString("name"); n.endsWith(".apk") && ("aosp" in n) == BuildConfig.AOSP }
+            val body = httpText(feedUrl)?.trim() ?: return@runCatching null
+            // The latest release (one object), or the list of releases (aosp).
+            val listed = if (body.startsWith("[")) JSONArray(body).let { a -> (0 until a.length()).map { a.getJSONObject(it) } }
+            else listOf(JSONObject(body))
             val abi = Build.SUPPORTED_ABIS.firstOrNull().orEmpty()
-            val apk = apks.minByOrNull {
-                val n = it.getString("name")
-                when {
-                    BuildConfig.AOSP && abi.isNotEmpty() && abi in n -> 0
-                    "universal" in n -> 2
-                    BuildConfig.AOSP -> 3 // Some other CPU's build.
-                    else -> 1
+            val candidates = listed
+                .filter { !it.optBoolean("draft") && it.optBoolean("prerelease") == BuildConfig.AOSP }
+                .mapNotNull { release ->
+                    val assets = release.getJSONArray("assets").let { a -> (0 until a.length()).map { a.getJSONObject(it) } }
+                    val name = pickApk(assets.map { it.getString("name") }, BuildConfig.AOSP, abi) ?: return@mapNotNull null
+                    Triple(release, assets, assets.first { it.getString("name") == name })
                 }
-            }?.takeIf { !BuildConfig.AOSP || "universal" in it.getString("name") || abi in it.getString("name") }
-            if (apk == null) {
+            // The newest version (the list comes newest first, but versions decide).
+            val (json, all, apk) = candidates.reduceOrNull { best, next ->
+                if (newer(releaseVersion(next.first.getString("tag_name")), releaseVersion(best.first.getString("tag_name")))) next else best
+            } ?: run {
                 noBuildForThisApp = true
                 return@runCatching null
             }
@@ -188,7 +196,7 @@ object AppUpdates {
                         ?.firstOrNull { it.size == 2 && it[1].trimStart('*') == name }?.get(0)
                 }
             Release(
-                version = json.getString("tag_name").removePrefix("v"),
+                version = releaseVersion(json.getString("tag_name")),
                 notes = json.optString("body").replace("**", "").replace("```", "").trim(),
                 apkUrl = apk.getString("browser_download_url"),
                 apkName = name,
@@ -325,6 +333,23 @@ object AppUpdates {
 
     private fun packageInfo(context: Context, flags: Int): PackageInfo =
         context.packageManager.getPackageInfo(context.packageName, flags)
+
+    /** "v1.4.2-aosp" -> "1.4.2": the version a release tag stands for. */
+    fun releaseVersion(tag: String) = tag.removePrefix("v").substringBefore('-')
+
+    /**
+     * Which of a release's files is this app's APK, or null if it has none. The phone app takes
+     * the phone build (arm64), not the larger universal one. The aosp app ("aosp" in the file name)
+     * takes the one for this device's CPU ([abi]), else the universal one.
+     */
+    fun pickApk(names: List<String>, aosp: Boolean, abi: String): String? {
+        val apks = names.filter { it.endsWith(".apk") && ("aosp" in it) == aosp }
+        return if (aosp) {
+            apks.firstOrNull { abi.isNotEmpty() && abi in it } ?: apks.firstOrNull { "universal" in it }
+        } else {
+            apks.firstOrNull { "universal" !in it } ?: apks.firstOrNull()
+        }
+    }
 
     /** Whether version [a] ("1.4", "1.0.1") is later than [b]. */
     fun newer(a: String, b: String): Boolean {

@@ -38,6 +38,9 @@ android {
         create("aosp") {
             dimension = "platform"
             applicationIdSuffix = ".aosp"
+            // Released on its own (GitHub pre-releases), so it has its own version.
+            versionCode = 10
+            versionName = "1.4.2"
             buildConfigField("boolean", "AOSP", "true")
         }
     }

@@ -88,6 +88,7 @@ import com.example.mapstyleeditor.nav.DriveNotification
 import com.example.mapstyleeditor.nav.DriveSession
 import com.example.mapstyleeditor.nav.GoogleNav
 import com.example.mapstyleeditor.nav.GuidanceVoice
+import com.example.mapstyleeditor.nav.planOwnDrive
 import com.example.mapstyleeditor.ui.VoiceDebug
 import com.example.mapstyleeditor.ui.VoiceKeys
 import com.example.mapstyleeditor.ui.VoicePanel
@@ -438,10 +439,8 @@ private fun rememberDriveStarter(
         val destination = Point.fromLngLat(place.longitude, place.latitude)
         val here = live.point ?: lastKnownPoint(context)
         val history = TripHistory(context)
-        val fastest = if (here == null) null else withTimeoutOrNull(10_000) {
-            fetchRoute(token, listOf(here, destination), live.bearing, guidance = true)
-        }
-        val vias = if (here == null || fastest == null) emptyList() else usualWayVias(history.all(), here, destination, fastest)
+        val plan = planOwnDrive(token, history.all(), here, live.bearing, destination)
+        val vias = plan.vias
         if (vias.isNotEmpty()) {
             Toast.makeText(context, "Taking your usual way to ${place.name}", Toast.LENGTH_SHORT).show()
         }
@@ -459,7 +458,7 @@ private fun rememberDriveStarter(
                 location = { live.point },
                 bearing = { live.bearing },
                 ownGuidance = true,
-                initialRoute = fastest.takeIf { vias.isEmpty() },
+                initialRoute = plan.route,
                 speak = { voice?.speak(it) },
             ),
         )
@@ -599,7 +598,7 @@ private fun MapWithSearch(
     val viewport = rememberMapViewportState {
         setCameraOptions {
             // Far enough out that the map is streets, water and parks rather than one tower's facade.
-            center(startPoint ?: Point.fromLngLat(-73.9855, 40.758))
+            center(startPoint ?: DEFAULT_CENTER)
             zoom(14.2)
             pitch(45.0)
             bearing(-20.0)
@@ -614,13 +613,17 @@ private fun MapWithSearch(
     val atStarbase by remember {
         derivedStateOf { viewport.cameraState?.let { it.zoom >= 13 && distanceMeters(it.center, STARBASE) < 4_000 } == true }
     }
-    // No last known position (fresh install, or location just granted): move to the first fix instead.
+    // No last known position (fresh install, location just granted, or a head unit that has only
+    // just powered up): move to the first fix instead. A cold GPS start can take minutes, so wait
+    // that long, but not if you've moved the map off the opening view in the meantime.
     LaunchedEffect(hasLocation) {
         if (startPoint != null || !hasLocation) return@LaunchedEffect
-        val first = withTimeoutOrNull(20_000) {
+        val first = withTimeoutOrNull(FIRST_FIX_WAIT_MS) {
             while (live.point == null) delay(250)
             live.point
         } ?: return@LaunchedEffect
+        val center = viewport.cameraState?.center
+        if (center != null && distanceMeters(center, DEFAULT_CENTER) > 200) return@LaunchedEffect
         viewport.easeTo(cameraOptions { center(first); zoom(14.2) })
     }
     // Learned destinations. Worked out when the map opens, when you come back to the app (at most
@@ -882,6 +885,10 @@ private fun MapWithSearch(
 }
 
 private const val GUIDANCE_GONE_MS = 10_000L
+/** How long a fresh start waits for the first GPS fix before staying on the opening view. */
+private const val FIRST_FIX_WAIT_MS = 180_000L
+/** Where the map opens when there's no known position at all (Times Square). */
+private val DEFAULT_CENTER: Point = Point.fromLngLat(-73.9855, 40.758)
 private const val ARRIVED_LINGER_MS = 8_000L
 /** After you move the map mid-drive, the camera goes back to following you after this long. */
 private const val REFOLLOW_AFTER_MS = 8_000L

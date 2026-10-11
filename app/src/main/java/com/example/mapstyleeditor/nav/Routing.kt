@@ -31,6 +31,10 @@ data class RouteStep(
     val modifier: String? = null,
     /** What to say while driving this step, and where (meters along the route) to say it. */
     val voice: List<VoiceCue> = emptyList(),
+    /** Which exit to take, for roundabouts. */
+    val exit: Int? = null,
+    /** "right" where traffic drives on the right (roundabouts then turn counterclockwise). */
+    val drivingSide: String? = null,
 )
 
 data class VoiceCue(val alongMeters: Double, val text: String)
@@ -174,6 +178,8 @@ internal fun parseRoute(json: String): Route? {
                 instruction = maneuver.optString("instruction"),
                 type = maneuver.optString("type"),
                 modifier = maneuver.optString("modifier").takeIf(String::isNotBlank),
+                exit = maneuver.optInt("exit", 0).takeIf { it > 0 },
+                drivingSide = step.optString("driving_side").takeIf(String::isNotBlank),
                 // Placed once every step's start is known (a cue counts back from its step's end).
                 voice = step.optJSONArray("voiceInstructions")?.let { cues ->
                     (0 until cues.length()).map { cues.getJSONObject(it) }.map {

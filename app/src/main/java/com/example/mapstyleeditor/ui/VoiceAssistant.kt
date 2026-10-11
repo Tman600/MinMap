@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -280,7 +281,7 @@ fun rememberVoiceAssistant(
         if (granted) state.start() else askMic.launch(Manifest.permission.RECORD_AUDIO)
     }
     val currentStart by rememberUpdatedState(start)
-    var seenPresses by remember { mutableStateOf(VoiceKeys.presses.value) }
+    var seenPresses by remember { mutableIntStateOf(VoiceKeys.presses.value) }
     LaunchedEffect(Unit) {
         VoiceKeys.presses.collect { count ->
             if (count != seenPresses) {

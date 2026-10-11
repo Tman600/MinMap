@@ -33,8 +33,10 @@ Android checks this on every update: an update signed with any other key won't i
 A separate build for Android without Google services, such as car head units: Android 8 and up
 (made for Android 9 units), no Google Maps and no Google Play services. It installs as its own app
 (`app.minmap.aosp`) next to the phone version. Download it from the
-[AOSP pre-release](https://github.com/Tman600/MinMap/releases/tag/v1.4.1-aosp); its source is
-tag `v1.4.1-aosp` on the `aosp` branch.
+[AOSP pre-release](https://github.com/Tman600/MinMap/releases/tag/v1.4.2-aosp); its source is
+tag `v1.4.2-aosp` on the `aosp` branch. AOSP builds are released as GitHub pre-releases, apart from
+the phone version, and from 1.4.2 the AOSP app updates itself from them (Updates tab in its
+settings menu).
 
 - **Navigation by MinMap itself:** turn card, spoken turns (the device's text-to-speech), rerouting
   and arrival, from one Mapbox route request per drive.
@@ -46,7 +48,7 @@ tag `v1.4.1-aosp` on the `aosp` branch.
 Pick the APK for the unit's processor (`adb shell getprop ro.product.cpu.abi`): `armeabi-v7a`
 (most head units), `arm64-v8a`, or `universal` if unsure. To check it against this source, build
 the tag with `./gradlew assembleAospRelease` and compare, for example:
-`python tools/verify-apk.py MinMap-aosp-1.4.1-armeabi-v7a.apk app/build/outputs/apk/aosp/release/app-aosp-armeabi-v7a-release-unsigned.apk`
+`python tools/verify-apk.py MinMap-aosp-1.4.2-armeabi-v7a.apk app/build/outputs/apk/aosp/release/app-aosp-armeabi-v7a-release-unsigned.apk`
 
 ## Source code
 

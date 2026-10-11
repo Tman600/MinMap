@@ -48,6 +48,10 @@ class DriveSession(
     var guidance by mutableStateOf<NavInstruction?>(null)
         private set
 
+    /** Where you are on the route, for the car screen ([ownGuidance] only); null until there's a route. */
+    var progress by mutableStateOf<DriveProgress?>(null)
+        private set
+
     /** Reached the destination ([ownGuidance] only). */
     var arrived by mutableStateOf(false)
         private set
@@ -197,6 +201,7 @@ class DriveSession(
 
         val next = current.steps.firstOrNull { it.alongMeters > along + 5 && it.type != "depart" } ?: return
         val toTurn = next.alongMeters - along
+        progress = DriveProgress(next, toTurn, total - along, current.secondsLeft(along))
         guidance = NavInstruction(
             instruction = next.instruction.ifBlank { next.names.firstOrNull().orEmpty() },
             distanceText = formatDistance(toTurn),
@@ -231,3 +236,12 @@ class DriveSession(
         const val DETOUR_FRACTION = 0.08
     }
 }
+
+/** The next maneuver and what's left of the trip, at the last check. */
+data class DriveProgress(
+    val next: RouteStep,
+    val toTurnMeters: Double,
+    val metersLeft: Double,
+    /** Null when the route came without timings. */
+    val secondsLeft: Double?,
+)

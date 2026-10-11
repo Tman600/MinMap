@@ -87,9 +87,9 @@ fun LocationSearchBar(
     near: () -> Point?,
     /** Where you are, for the distances shown. */
     here: () -> Point?,
+    modifier: Modifier = Modifier,
     /** "Where to?" by voice; null hides the mic (nothing to listen with). */
     onMic: (() -> Unit)? = null,
-    modifier: Modifier = Modifier,
 ) {
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<SearchHit>>(emptyList()) }
