@@ -1,5 +1,6 @@
 package com.example.mapstyleeditor.nav
 
+import com.example.mapstyleeditor.account.MapboxUsage
 import com.mapbox.geojson.Point
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -269,6 +270,7 @@ internal fun httpGet(url: String, userAgent: String? = null): String? {
         conn.connectTimeout = 8000
         conn.readTimeout = 8000
         userAgent?.let { conn.setRequestProperty("User-Agent", it) }
+        MapboxUsage.record(url, conn.responseCode)
         if (conn.responseCode != HttpURLConnection.HTTP_OK) null else conn.inputStream.bufferedReader().use { it.readText() }
     } finally {
         conn.disconnect()

@@ -96,19 +96,14 @@ import com.mapbox.maps.plugin.locationcomponent.LocationProvider
 import com.example.mapstyleeditor.ui.DriveOverlay
 import com.example.mapstyleeditor.places.TappedPoi
 import com.example.mapstyleeditor.account.MapboxAccount
+import com.example.mapstyleeditor.account.MapboxUsage
+import com.example.mapstyleeditor.ui.MapboxBlockedCard
 import com.example.mapstyleeditor.demo.DemoDrive
 import com.example.mapstyleeditor.update.AppUpdates
 import android.content.pm.ApplicationInfo
-import com.example.mapstyleeditor.starbase.Pad
 import com.example.mapstyleeditor.starbase.STARBASE
-import com.example.mapstyleeditor.starbase.StarbaseLaunches
 import com.example.mapstyleeditor.starbase.StarbaseLayers
-import com.example.mapstyleeditor.starbase.StarbasePill
-import com.example.mapstyleeditor.starbase.replayDone
-import com.example.mapstyleeditor.starbase.replayOf
 import com.example.mapstyleeditor.ui.glassStyle
-import com.example.mapstyleeditor.starbase.StarshipLaunch
-import com.example.mapstyleeditor.starbase.demoStarbaseLaunch
 import com.example.mapstyleeditor.ui.SignInScreen
 import com.example.mapstyleeditor.ui.LocationSearchBar
 import com.example.mapstyleeditor.ui.Place
@@ -164,6 +159,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         // Mapbox throws if a map is created without a token, so the map only shows once an account
         // is signed in (see SignInScreen).
+        MapboxUsage.init(this)
         MapboxAccount.load(this)
         val editor = EditorState(getSharedPreferences("map_style", MODE_PRIVATE))
         val demo = DemoDrive.from(intent, applicationInfo)
@@ -172,10 +168,9 @@ class MainActivity : ComponentActivity() {
             intent?.getStringExtra("update_feed")?.let { AppUpdates.feedUrl = it }
         }
         AppUpdates.justUpdatedTo(this)?.let { Toast.makeText(this, "MinMap updated to $it", Toast.LENGTH_LONG).show() }
-        val starbaseDemo = demoStarbaseLaunch(intent, applicationInfo)
         setContent {
             AppTheme {
-                MapStyleEditorScreen(editor, demo, starbaseDemo)
+                MapStyleEditorScreen(editor, demo)
             }
         }
     }
@@ -212,7 +207,7 @@ class EditorState(private val prefs: SharedPreferences) {
 }
 
 @Composable
-fun MapStyleEditorScreen(editor: EditorState, demo: DemoDrive? = null, starbaseDemo: StarshipLaunch? = null) {
+fun MapStyleEditorScreen(editor: EditorState, demo: DemoDrive? = null) {
     var menuOpen by rememberSaveable { mutableStateOf(false) }
     val live = remember { LiveLocation() }
     var drive by remember { mutableStateOf<DriveSession?>(null) }
@@ -264,7 +259,6 @@ fun MapStyleEditorScreen(editor: EditorState, demo: DemoDrive? = null, starbaseD
                         startDrive(it)
                     },
                     onEndDrive = { drive = null },
-                    starbaseDemo = starbaseDemo,
                 )
             } else {
                 SignInScreen()
@@ -477,7 +471,6 @@ private fun MapWithSearch(
     onMenuOpenChange: (Boolean) -> Unit,
     onDrive: (Place) -> Unit,
     onEndDrive: () -> Unit,
-    starbaseDemo: StarshipLaunch? = null,
 ) {
     val style = editor.style
     val hazeState = rememberHazeState()
@@ -494,41 +487,15 @@ private fun MapWithSearch(
             bearing(-20.0)
         }
     }
-    // A demo launch (debug builds, see demoStarbaseLaunch) opens looking at the pad.
-    LaunchedEffect(starbaseDemo) {
-        val pad = starbaseDemo?.pad ?: return@LaunchedEffect
-        viewport.setCameraOptions(starbaseCamera(pad))
-    }
-    // Starbase: its 3D pads (and rocket, around a launch) while the map is anywhere near it. Close
-    // in, Standard's own buildings there are switched off: it draws each launch tower as a plain
-    // 143 m block that would swallow the tower model.
+    // Starbase: its 3D pads while the map is anywhere near it. Close in, Standard's own buildings
+    // there are switched off: it draws each launch tower as a plain 143 m block that would swallow
+    // the tower model.
     val showStarbase by remember {
-        derivedStateOf { viewport.cameraState?.let { it.zoom >= 9 && distanceMeters(it.center, STARBASE) < 60_000 } == true }
+        derivedStateOf { viewport.cameraState?.let { it.zoom >= 11 && distanceMeters(it.center, STARBASE) < 20_000 } == true }
     }
     val atStarbase by remember {
         derivedStateOf { viewport.cameraState?.let { it.zoom >= 13 && distanceMeters(it.center, STARBASE) < 4_000 } == true }
     }
-    val launches = remember { StarbaseLaunches(context) }
-    var liveLaunch by remember { mutableStateOf<StarshipLaunch?>(null) }
-    var lastFlight by remember { mutableStateOf<StarshipLaunch?>(null) }
-    var replay by remember { mutableStateOf<StarshipLaunch?>(null) }
-    LaunchedEffect(showStarbase) {
-        if (!showStarbase || starbaseDemo?.status == "Go") return@LaunchedEffect
-        while (true) {
-            // Both only ask Launch Library when their cached answers are due (see there).
-            liveLaunch = launches.current()
-            lastFlight = launches.lastFlight()
-            delay(60_000)
-        }
-    }
-    LaunchedEffect(replay) {
-        val flight = replay ?: return@LaunchedEffect
-        // Watch from beside the pad it flew from, then let the scene go back to the real one.
-        viewport.flyTo(starbaseCamera(flight.pad))
-        while (!replayDone(flight)) delay(1_000)
-        replay = null
-    }
-    val starshipLaunch = starbaseDemo?.takeIf { it.status == "Go" } ?: replay ?: liveLaunch
     // No last known position (fresh install, or location just granted): move to the first fix instead.
     LaunchedEffect(hasLocation) {
         if (startPoint != null || !hasLocation) return@LaunchedEffect
@@ -539,7 +506,7 @@ private fun MapWithSearch(
         viewport.easeTo(cameraOptions { center(first); zoom(14.2) })
     }
     // Learned destinations. Worked out when the map opens, when you come back to the app (at most
-    // every 10 minutes, since each one costs a drive-time request), after a drive, and after a
+    // every half hour, since each one costs a drive-time request), after a drive, and after a
     // "forget". They only ever offer a drive; nothing starts on its own.
     val history = remember { TripHistory(context) }
     var suggestions by remember { mutableStateOf<List<SuggestedDrive>>(emptyList()) }
@@ -660,12 +627,21 @@ private fun MapWithSearch(
             hasLocation = hasLocation,
             closeUp = drive != null && closeUp,
             robotaxiAreas = if (showRobotaxi) robotaxiAreas else emptyMap(),
-            starbase = StarbaseView(show = showStarbase, hideBuildings = atStarbase, launch = starshipLaunch),
+            starbase = StarbaseView(show = showStarbase, hideBuildings = atStarbase),
             onPoiClick = { if (drive == null) tappedPoi = it },
             onMapClick = { tappedPoi = null },
             modifier = Modifier.fillMaxSize().hazeSource(hazeState),
         )
         val bars = Modifier.windowInsetsPadding(WindowInsets.safeDrawing)
+        if (MapboxUsage.blocked) {
+            MapboxBlockedCard(
+                hazeState = hazeState,
+                darkMap = darkMap,
+                onUseAnotherAccount = { MapboxAccount.signOut(context) },
+                // Below the status bar, clear of the style menu's button in the top-right corner.
+                modifier = Modifier.align(Alignment.TopCenter).then(bars).padding(start = 12.dp, end = 72.dp, top = 12.dp),
+            )
+        }
         if (showRobotaxi) {
             // The dataset's licence (CC BY 4.0) asks for this credit wherever the areas are shown.
             Text(
@@ -736,20 +712,6 @@ private fun MapWithSearch(
                 modifier = Modifier.align(Alignment.BottomCenter).then(bars).padding(bottom = 40.dp),
             )
         }
-        if (drive == null && atStarbase) {
-            StarbasePill(
-                hazeState = hazeState,
-                glass = remember(darkMap) { glassStyle(darkMap) },
-                darkMap = darkMap,
-                live = liveLaunch,
-                replay = replay,
-                lastFlight = lastFlight,
-                onReplay = { lastFlight?.let { replay = replayOf(it) } },
-                onEndReplay = { replay = null },
-                // Kept clear of the style menu's button in the top-right corner, and centred.
-                modifier = Modifier.align(Alignment.TopCenter).then(bars).padding(top = 14.dp, start = 72.dp, end = 72.dp),
-            )
-        }
         if (drive == null) {
             // Last, so the menu and its button sit above everything else on the map.
             StyleMenu(editor, hazeState, open = menuOpen, onOpenChange = onMenuOpenChange, modifier = bars)
@@ -762,7 +724,7 @@ private const val GUIDANCE_GONE_MS = 10_000L
 private const val REFOLLOW_AFTER_MS = 8_000L
 private const val CLOSE_UP_ZOOM = 19.4
 private const val CLOSE_UP_PITCH = 78.0
-private const val SUGGEST_REFRESH_MS = 10 * 60 * 1000L
+private const val SUGGEST_REFRESH_MS = 30 * 60 * 1000L
 
 /**
  * One-time heads-up on the first drive: Google Maps shrinks into a floating picture-in-picture
@@ -891,7 +853,7 @@ private fun StyledMap(
                 middleSlot = {
                     RobotaxiLayers(robotaxiAreas)
                     drive?.route?.let { RouteLayers(it) }
-                    if (starbase.show) StarbaseLayers(starbase.launch, darkMap = style.light == LightPreset.NIGHT || style.light == LightPreset.DUSK)
+                    if (starbase.show) StarbaseLayers(darkMap = style.light == LightPreset.NIGHT || style.light == LightPreset.DUSK)
                 },
                 standardStyleState = standardStyle,
             )
@@ -900,6 +862,11 @@ private fun StyledMap(
         MapEffect(Unit) { mapView ->
             val map = mapView.mapboxMap
             map.getStyle { defaultColors = readDefaultColors(map) }
+            // Mapbox turning the token away (a demo account over its allowance) shows up here first.
+            map.subscribeMapLoadingError { error ->
+                val m = error.message
+                if ("401" in m || "403" in m || "Unauthorized" in m || "Not Authorized" in m) MapboxUsage.mapRefused()
+            }
             trimmer.map = map
             mapView.location.addOnIndicatorPositionChangedListener {
                 live.point = it
@@ -938,16 +905,8 @@ private fun StyledMap(
     }
 }
 
-/** Looking at [pad] side-on, from where the stacking and the climb both show (see Pad.viewBearing). */
-private fun starbaseCamera(pad: Pad) = cameraOptions {
-    center(pad.tower)
-    zoom(16.3)
-    pitch(70.0)
-    bearing(pad.viewBearing)
-}
-
-/** What StyledMap draws of Starbase: whether at all, whether to hide Standard's buildings, and which launch. */
-private class StarbaseView(val show: Boolean, val hideBuildings: Boolean, val launch: StarshipLaunch?)
+/** What StyledMap draws of Starbase: whether at all, and whether to hide Standard's buildings there. */
+private class StarbaseView(val show: Boolean, val hideBuildings: Boolean)
 
 private const val MAX_ZOOM = 17.5
 private const val MAX_PITCH = 60.0

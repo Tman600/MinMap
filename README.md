@@ -11,14 +11,14 @@ From version 1.3, MinMap keeps itself up to date: the **Updates** tab in its set
 Each release lists the SHA-256 checksum of its APK, also in [`SHA256SUMS`](SHA256SUMS). The latest:
 
 ```
-d1fd2f50cb0dec9231cf922c85539e31bd0758dcb062cccf1ce6943a4e6c852d  MinMap-1.3.apk
+01918e8336390430c439e6e63efaaabb55e5c70d22445dc3bc17778f9bd15f40  MinMap-1.4.apk
 ```
 
 Check it after downloading:
 
-- Windows: `certutil -hashfile MinMap-1.3.apk SHA256`
-- macOS: `shasum -a 256 MinMap-1.3.apk`
-- Linux: `sha256sum MinMap-1.3.apk`
+- Windows: `certutil -hashfile MinMap-1.4.apk SHA256`
+- macOS: `shasum -a 256 MinMap-1.4.apk`
+- Linux: `sha256sum MinMap-1.4.apk`
 
 Official releases are signed with the MinMap key. The signing certificate's SHA-256 fingerprint is:
 
@@ -30,13 +30,13 @@ Android checks this on every update: an update signed with any other key won't i
 
 ## Source code
 
-This repository is the exact source of each release: tag `v1.3` is what MinMap 1.3 was built from (and `v1.0.1` what 1.0.1 was).
+This repository is the exact source of each release: tag `v1.4` is what MinMap 1.4 was built from (and `v1.3`, `v1.0.1` the earlier releases).
 The build is reproducible, so you can confirm the APK contains this code and nothing else:
 
 1. Install [Android Studio](https://developer.android.com/studio) (or JDK 17+ and the Android SDK).
-2. Check out the release tag and build it: `git checkout v1.3`, then `./gradlew assembleRelease` (`gradlew.bat` on Windows).
+2. Check out the release tag and build it: `git checkout v1.4`, then `./gradlew assembleRelease` (`gradlew.bat` on Windows).
 3. Compare your build with the official APK:
-   `python tools/verify-apk.py MinMap-1.3.apk app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk`
+   `python tools/verify-apk.py MinMap-1.4.apk app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk`
 
 It should report every file as identical. Only the signature differs, since only official builds are signed.
 

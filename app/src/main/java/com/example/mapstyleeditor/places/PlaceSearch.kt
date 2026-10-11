@@ -1,5 +1,6 @@
 package com.example.mapstyleeditor.places
 
+import com.example.mapstyleeditor.account.MapboxUsage
 import com.example.mapstyleeditor.nav.distanceMeters
 import com.example.mapstyleeditor.ui.Place
 import com.mapbox.geojson.Point
@@ -37,8 +38,20 @@ data class SearchHit(
 class PlaceSearch(private val token: String) {
     private var session = UUID.randomUUID().toString()
 
+    /** Recent answers, so retyping or backspacing doesn't ask Mapbox again. */
+    private val recent = object : LinkedHashMap<String, List<SearchHit>>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<SearchHit>>) = size > 40
+    }
+
     /** Suggestions for [query], ranked near [near] (where the map is), with distances from [here]. */
     suspend fun suggest(query: String, near: Point?, here: Point?): List<SearchHit> {
+        val text = query.trim()
+        if (text.length < MIN_LETTERS) return emptyList()
+        recent["s:" + text.lowercase()]?.let { return it }
+        return fetchSuggestions(text, near, here).also { if (it.isNotEmpty()) recent["s:" + text.lowercase()] = it }
+    }
+
+    private suspend fun fetchSuggestions(query: String, near: Point?, here: Point?): List<SearchHit> {
         val body = get(
             "suggest",
             "q" to query.trim(), "session_token" to session, "limit" to "8", "language" to language(),
@@ -60,6 +73,11 @@ class PlaceSearch(private val token: String) {
 
     /** The nearest places in [category] around [near], closest to [here] first. */
     suspend fun category(category: String, near: Point?, here: Point?): List<SearchHit> {
+        recent["c:$category"]?.let { return it }
+        return fetchCategory(category, near, here).also { if (it.isNotEmpty()) recent["c:$category"] = it }
+    }
+
+    private suspend fun fetchCategory(category: String, near: Point?, here: Point?): List<SearchHit> {
         val body = get(
             "category/" + URLEncoder.encode(category, "UTF-8"),
             "limit" to "10", "language" to language(),
@@ -104,10 +122,12 @@ class PlaceSearch(private val token: String) {
             val query = (params.toList() + ("access_token" to token))
                 .filter { it.second != null }
                 .joinToString("&") { (k, v) -> k + "=" + URLEncoder.encode(v, "UTF-8") }
-            val conn = URL("https://api.mapbox.com/search/searchbox/v1/$path?$query").openConnection() as HttpURLConnection
+            val url = "https://api.mapbox.com/search/searchbox/v1/$path?$query"
+            val conn = URL(url).openConnection() as HttpURLConnection
             try {
                 conn.connectTimeout = 8000
                 conn.readTimeout = 8000
+                MapboxUsage.record(url, conn.responseCode)
                 if (conn.responseCode != HttpURLConnection.HTTP_OK) null
                 else conn.inputStream.bufferedReader().use { it.readText() }
             } finally {
@@ -118,6 +138,11 @@ class PlaceSearch(private val token: String) {
 
     private fun lngLat(p: Point) = "${p.longitude()},${p.latitude()}"
     private fun language() = Locale.getDefault().language.ifBlank { "en" }
+
+    private companion object {
+        /** One or two letters match almost everything; Mapbox is only asked from the third. */
+        const val MIN_LETTERS = 3
+    }
 }
 
 /** "350 ft", "2.4 mi" where miles are used; "350 m", "2.4 km" elsewhere. */

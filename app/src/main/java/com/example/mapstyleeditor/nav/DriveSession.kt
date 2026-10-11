@@ -130,8 +130,9 @@ class DriveSession(
     private companion object {
         const val TICK_MS = 2_000L
         const val OFF_ROUTE_METERS = 60.0
-        const val REROUTE_COOLDOWN_MS = 10_000L
-        const val RETRY_MS = 5_000L
+        // Each reroute is a Directions request on the user's Mapbox account.
+        const val REROUTE_COOLDOWN_MS = 20_000L
+        const val RETRY_MS = 10_000L
         const val VIA_REACHED_METERS = 150.0
         /** How far past the corner, along the street being turned onto, the steering point goes. */
         const val LOOK_AHEAD_METERS = 60.0

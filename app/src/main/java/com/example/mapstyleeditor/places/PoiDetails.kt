@@ -33,13 +33,24 @@ data class PoiDetails(
     val about: String? = null,
 )
 
-/** Looks up [poi] in Mapbox Search and Wikipedia at the same time. */
-suspend fun loadPoiDetails(token: String, poi: TappedPoi): PoiDetails = coroutineScope {
-    val mapbox = async { mapboxDetails(token, poi) }
-    val wiki = async { wikipediaPhoto(poi) }
-    val base = mapbox.await() ?: PoiDetails()
-    val (photo, about) = wiki.await() ?: (null to null)
-    base.copy(photo = photo, about = about)
+/**
+ * Looks up [poi] in Mapbox Search and Wikipedia at the same time. Places already looked up this
+ * session come from memory: each Mapbox lookup is a search session on the user's account.
+ */
+suspend fun loadPoiDetails(token: String, poi: TappedPoi): PoiDetails {
+    val key = "${poi.name}|${"%.4f".format(poi.point.latitude())}|${"%.4f".format(poi.point.longitude())}"
+    seen[key]?.let { return it }
+    return coroutineScope {
+        val mapbox = async { mapboxDetails(token, poi) }
+        val wiki = async { wikipediaPhoto(poi) }
+        val base = mapbox.await() ?: PoiDetails()
+        val (photo, about) = wiki.await() ?: (null to null)
+        base.copy(photo = photo, about = about)
+    }.also { seen[key] = it }
+}
+
+private val seen = object : LinkedHashMap<String, PoiDetails>(16, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PoiDetails>) = size > 30
 }
 
 /**

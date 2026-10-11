@@ -108,7 +108,7 @@ fun LocationSearchBar(
         }
         if (query == browsing) return@LaunchedEffect
         browsing = null
-        delay(350)
+        delay(450)
         results = search.suggest(query, near(), here())
     }
 

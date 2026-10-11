@@ -61,6 +61,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.example.mapstyleeditor.update.UpdatesPanel
+import com.example.mapstyleeditor.account.MapboxUsage
 import com.example.mapstyleeditor.account.MapboxAccount
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -147,12 +148,20 @@ private fun MapboxAccountRow() {
         Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 4.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            if (MapboxAccount.user.isNotEmpty()) "Mapbox: ${MapboxAccount.user}" else "Mapbox account connected",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f),
-        )
+        Column(Modifier.weight(1f)) {
+            Text(
+                if (MapboxAccount.user.isNotEmpty()) "Mapbox: ${MapboxAccount.user}" else "Mapbox account connected",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            // MinMap's own requests on the account this month (the map itself is billed separately,
+            // per phone per month).
+            Text(
+                MapboxUsage.summary()?.let { "This month: $it" } ?: "No Mapbox searches or routes yet this month",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+            )
+        }
         TextButton(onClick = { MapboxAccount.signOut(context) }) { Text("Sign out") }
     }
 }

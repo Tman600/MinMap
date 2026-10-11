@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.4
+
+- **When Mapbox pauses your account:** accounts made without a card are on Mapbox's free demo, and
+  once its small monthly allowance is used up Mapbox stops sending maps and search results. MinMap
+  now says so in a panel, explains that adding a card on Mapbox lifts the demo limit, and lists
+  what the standard free tier includes each month (the map on 25,000 phones, 500 searches, 50,000
+  nearby lists, 100,000 routes and 100,000 street lookups), with a link to Mapbox and a way to
+  switch accounts. Signing in with an account in this state says the same.
+- **Lighter on your Mapbox account:** search waits for three letters and remembers recent results,
+  a place you've already tapped isn't looked up again, reroutes during a drive are spaced further
+  apart, and drive times for suggested places refresh half-hourly.
+- **See your use:** the settings menu shows MinMap's searches, routes and lookups on your account
+  this month.
+- **Starship launches removed:** the launch animation, countdown and replays added in 1.1 and 1.2
+  are gone. They had grown overly complex and took away from the point of MinMap, which is being a
+  map. Starbase's launch towers, chopsticks and mounts stay on the map in 3D, and MinMap no longer
+  checks for launches.
+
 ## 1.3
 
 **Search for places**

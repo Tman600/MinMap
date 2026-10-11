@@ -39,6 +39,7 @@ object MapboxAccount {
             putString(KEY_USER, user)
         }
         this.user = user
+        MapboxUsage.reset()
         use(token)
     }
 
@@ -46,6 +47,7 @@ object MapboxAccount {
         prefs(context).edit { clear() }
         user = ""
         token = ""
+        MapboxUsage.reset()
     }
 
     private fun use(token: String) {
@@ -59,6 +61,18 @@ object MapboxAccount {
     private const val KEY_TOKEN = "token"
     private const val KEY_USER = "user"
 }
+
+private fun styleRefused(token: String): Boolean = runCatching {
+    val conn = URL("https://api.mapbox.com/styles/v1/mapbox/standard?access_token=" + URLEncoder.encode(token, "UTF-8"))
+        .openConnection() as HttpURLConnection
+    try {
+        conn.connectTimeout = 8000
+        conn.readTimeout = 8000
+        conn.responseCode == 401 || conn.responseCode == 403
+    } finally {
+        conn.disconnect()
+    }
+}.getOrDefault(false)
 
 sealed interface TokenCheck {
     data class Valid(val user: String) : TokenCheck
@@ -86,7 +100,18 @@ suspend fun checkToken(token: String): TokenCheck = withContext(Dispatchers.IO) 
     }.getOrNull() ?: return@withContext TokenCheck.Invalid("Couldn't reach Mapbox. Check your connection and try again.")
     val json = runCatching { JSONObject(body) }.getOrNull()
     when (json?.optString("code")) {
-        "TokenValid" -> TokenCheck.Valid(json.optJSONObject("token")?.optString("user").orEmpty())
+        // A valid token can still be turned away everywhere: a demo-access account that has used up
+        // its allowance. Loading the map style (which the map does first anyway) shows which.
+        "TokenValid" -> if (styleRefused(token)) {
+            TokenCheck.Invalid(
+                "This Mapbox account has used up its free demo, so Mapbox won't send it maps. Add a card " +
+                    "on Mapbox to make it a standard account: it's only charged beyond the free tier, which " +
+                    "each month includes the map on 25,000 phones, 500 searches and 100,000 routes. Or use " +
+                    "a different account.",
+            )
+        } else {
+            TokenCheck.Valid(json.optJSONObject("token")?.optString("user").orEmpty())
+        }
         "TokenExpired" -> TokenCheck.Invalid("That token has expired. Copy a current one from Mapbox.")
         "TokenRevoked" -> TokenCheck.Invalid("That token was deleted on Mapbox. Copy a current one.")
         else -> TokenCheck.Invalid("Mapbox didn't accept that token. Check it was copied in full.")
