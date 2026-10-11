@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
+import com.example.mapstyleeditor.BuildConfig
 import androidx.core.content.edit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -104,7 +105,12 @@ object AppUpdates {
         prefs(context).edit { putLong(KEY_CHECKED_AT, now) }
         _state.update {
             if (release == null) {
-                it.copy(checking = false, error = "Couldn't reach GitHub. Check your connection and try again.")
+                val problem = if (noBuildForThisApp) {
+                    "The latest MinMap release has no build for this device yet."
+                } else {
+                    "Couldn't reach GitHub. Check your connection and try again."
+                }
+                it.copy(checking = false, error = problem)
             } else {
                 it.copy(checking = false, checkedAt = now, latest = release, available = newer(release.version, currentVersion(context)))
             }
@@ -148,14 +154,32 @@ object AppUpdates {
         _state.update { it.copy(installing = false, error = message) }
     }
 
+    /** The last check found a release, but no APK of this build (phone or aosp) in it. */
+    @Volatile private var noBuildForThisApp = false
+
     private suspend fun fetchLatest(): Release? = withContext(Dispatchers.IO) {
+        noBuildForThisApp = false
         runCatching {
             val json = JSONObject(httpText(feedUrl) ?: return@runCatching null)
             val assets = json.getJSONArray("assets")
             val all = (0 until assets.length()).map { assets.getJSONObject(it) }
-            // The phone build (arm64), not the larger universal one.
-            val apk = all.filter { it.getString("name").endsWith(".apk") }
-                .minByOrNull { if ("universal" in it.getString("name")) 1 else 0 } ?: return@runCatching null
+            // The phone build (arm64), not the larger universal one. The aosp build (its own app,
+            // "aosp" in the file name) takes the one for this device's CPU, else the universal one.
+            val apks = all.filter { val n = it.getString("name"); n.endsWith(".apk") && ("aosp" in n) == BuildConfig.AOSP }
+            val abi = Build.SUPPORTED_ABIS.firstOrNull().orEmpty()
+            val apk = apks.minByOrNull {
+                val n = it.getString("name")
+                when {
+                    BuildConfig.AOSP && abi.isNotEmpty() && abi in n -> 0
+                    "universal" in n -> 2
+                    BuildConfig.AOSP -> 3 // Some other CPU's build.
+                    else -> 1
+                }
+            }?.takeIf { !BuildConfig.AOSP || "universal" in it.getString("name") || abi in it.getString("name") }
+            if (apk == null) {
+                noBuildForThisApp = true
+                return@runCatching null
+            }
             val name = apk.getString("name")
             val sha = apk.optString("digest").removePrefix("sha256:").takeIf { it.length == 64 }
                 ?: all.find { it.getString("name") == "SHA256SUMS" }?.let { sums ->

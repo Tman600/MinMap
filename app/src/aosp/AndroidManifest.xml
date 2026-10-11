@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android without Google: MinMap navigates by itself, so nothing that exists only to follow
+     Google Maps (its notification, the overlay bubble that returns from it) is declared, and no
+     Google Play services are used. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" tools:node="remove" />
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" tools:node="remove" />
+
+    <queries>
+        <package android:name="com.google.android.apps.maps" tools:node="remove" />
+    </queries>
+
+    <application>
+        <!-- Mapbox networking without Play services' Cronet (left out of this build): its own OkHttp. -->
+        <meta-data
+            android:name="com.mapbox.common.use_legacy_http_service"
+            android:value="true" />
+        <service
+            android:name="com.example.mapstyleeditor.nav.GoogleNavListener"
+            tools:node="remove" />
+
+        <!-- Can be picked as the head unit's voice command app (its steering-wheel voice button):
+             MinMap opens listening for "navigate to...". -->
+        <activity
+            android:name="com.example.mapstyleeditor.MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VOICE_COMMAND" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

@@ -6,6 +6,11 @@ activityCompose = "1.13.0"
 composeBom = "2026.09.00"
 mapbox = "11.32.0"
 haze = "2.0.1"
+zxing = "3.5.3"
+junit = "4.13.2"
+json = "20240303"
+vosk = "0.3.47"
+jna = "5.13.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -20,6 +25,11 @@ mapbox-compose = { group = "com.mapbox.extension", name = "maps-compose-ndk27", 
 # Backdrop blur for the frosted-glass search bar.
 haze = { group = "dev.chrisbanes.haze", name = "haze", version.ref = "haze" }
 haze-blur = { group = "dev.chrisbanes.haze", name = "haze-blur", version.ref = "haze" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+json = { group = "org.json", name = "json", version.ref = "json" }
+vosk-android = { group = "com.alphacephei", name = "vosk-android", version.ref = "vosk" }
+jna = { group = "net.java.dev.jna", name = "jna", version.ref = "jna" }
+zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

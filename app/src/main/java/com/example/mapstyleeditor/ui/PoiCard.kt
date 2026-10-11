@@ -1,5 +1,6 @@
 package com.example.mapstyleeditor.ui
 
+import com.example.mapstyleeditor.BuildConfig
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
@@ -111,7 +112,8 @@ fun PoiCard(
                 val place = Place(poi.name, details?.address.orEmpty(), poi.point.longitude(), poi.point.latitude())
                 ActionPill("Drive", ink, edge, primary = true) { onDrive(place) }
                 robotaxi.forEach { RobotaxiPill(it, ink, edge) }
-                ActionPill("Google Maps", ink, edge) {
+                // Not on Android without Google (aosp): there's no Google Maps to open.
+                if (!BuildConfig.AOSP) ActionPill("Google Maps", ink, edge) {
                     val q = Uri.encode("${poi.name}${details?.address?.let { ", $it" }.orEmpty()}")
                     val geo = Intent(Intent.ACTION_VIEW, Uri.parse("geo:${poi.point.latitude()},${poi.point.longitude()}?q=$q"))
                         .setPackage("com.google.android.apps.maps")
@@ -122,7 +124,8 @@ fun PoiCard(
                     }
                 }
                 details?.phone?.let { phone ->
-                    ActionPill("Call", ink, edge) { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))) }
+                    // Head units and tablets may have no dialer.
+                    ActionPill("Call", ink, edge) { runCatching { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))) } }
                 }
                 details?.website?.let { site ->
                     ActionPill("Website", ink, edge) {

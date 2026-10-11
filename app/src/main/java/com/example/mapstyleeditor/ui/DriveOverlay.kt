@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.mapstyleeditor.BuildConfig
 import com.example.mapstyleeditor.nav.NavInstruction
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeState
@@ -34,8 +35,8 @@ import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.hazeBlur
 
 /**
- * Drive-mode chrome over the map: Google's next turn in a frosted card at the top, and an End
- * button at the bottom. [instruction] is null until Google Maps' guidance shows up.
+ * Drive-mode chrome over the map: the next turn in a frosted card at the top, and an End button at
+ * the bottom. [instruction] is null until guidance starts (Google Maps', or MinMap's own on aosp).
  */
 @Composable
 fun DriveOverlay(
@@ -79,9 +80,9 @@ fun DriveOverlay(
             }
             Column(Modifier.weight(1f)) {
                 if (instruction == null) {
-                    Text("Starting Google Maps…", color = ink, fontSize = 18.sp)
+                    Text(if (BuildConfig.AOSP) "Finding a route…" else "Starting Google Maps…", color = ink, fontSize = 18.sp)
                     Text(
-                        "Directions appear here once its navigation is running.",
+                        if (BuildConfig.AOSP) "Your first turn appears here in a moment." else "Directions appear here once its navigation is running.",
                         color = ink.copy(alpha = 0.65f),
                         fontSize = 13.sp,
                     )

@@ -87,6 +87,19 @@ import com.example.mapstyleeditor.robotaxi.providersCovering
 import com.example.mapstyleeditor.nav.DriveNotification
 import com.example.mapstyleeditor.nav.DriveSession
 import com.example.mapstyleeditor.nav.GoogleNav
+import com.example.mapstyleeditor.nav.GuidanceVoice
+import com.example.mapstyleeditor.ui.VoiceDebug
+import com.example.mapstyleeditor.ui.VoiceKeys
+import com.example.mapstyleeditor.ui.VoicePanel
+import com.example.mapstyleeditor.ui.rememberVoiceAssistant
+import com.example.mapstyleeditor.voice.OfflineVoice
+import com.example.mapstyleeditor.voice.VoiceCommand
+import com.example.mapstyleeditor.voice.VoiceDestinations
+import com.example.mapstyleeditor.voice.VoiceOutcome
+import com.example.mapstyleeditor.voice.parseVoiceCommand
+import android.view.KeyEvent
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.example.mapstyleeditor.nav.ROUTE_LAYER_IDS
 import com.example.mapstyleeditor.nav.ReturnToApp
 import com.example.mapstyleeditor.nav.Route
@@ -168,11 +181,37 @@ class MainActivity : ComponentActivity() {
             intent?.getStringExtra("update_feed")?.let { AppUpdates.feedUrl = it }
         }
         AppUpdates.justUpdatedTo(this)?.let { Toast.makeText(this, "MinMap updated to $it", Toast.LENGTH_LONG).show() }
+        if (intent?.action == Intent.ACTION_VOICE_COMMAND) VoiceKeys.press()
+        // Debug builds: run a recorded request through the offline recognizer (adb, see OfflineVoice).
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+            VoiceDebug.noSystemRecognizer = intent?.getBooleanExtra("voice_no_system", false) == true
+            intent?.getStringExtra("voice_test_wav")?.let { path ->
+                kotlin.concurrent.thread {
+                    val heard = OfflineVoice.recognizeFile(this, java.io.File(path))
+                    android.util.Log.i("MinMapVoiceTest", "heard=$heard command=${heard?.let(::parseVoiceCommand)}")
+                }
+            }
+        }
         setContent {
             AppTheme {
                 MapStyleEditorScreen(editor, demo)
             }
         }
+    }
+
+    // MinMap picked as the device's voice command app (e.g. a steering-wheel voice button).
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.action == Intent.ACTION_VOICE_COMMAND) VoiceKeys.press()
+    }
+
+    // A voice or search key (steering wheel, remote) that reaches the app: listen.
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if ((keyCode == KeyEvent.KEYCODE_VOICE_ASSIST || keyCode == KeyEvent.KEYCODE_SEARCH) && event.repeatCount == 0) {
+            VoiceKeys.press()
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
     }
 }
 
@@ -211,7 +250,11 @@ fun MapStyleEditorScreen(editor: EditorState, demo: DemoDrive? = null) {
     var menuOpen by rememberSaveable { mutableStateOf(false) }
     val live = remember { LiveLocation() }
     var drive by remember { mutableStateOf<DriveSession?>(null) }
-    val startDrive = rememberDriveStarter(live) { drive = it }
+    val context = LocalContext.current
+    // Without Google Maps, MinMap speaks the turns itself (Android's own text-to-speech).
+    val voice = remember { if (BuildConfig.AOSP) GuidanceVoice(context) else null }
+    DisposableEffect(voice) { onDispose { voice?.shutdown() } }
+    val startDrive = rememberDriveStarter(live, voice) { drive = it }
     // Screenshot drive (debug builds only, see DemoDrive): drive mode straight away, without Google Maps.
     LaunchedEffect(demo) {
         if (demo == null) return@LaunchedEffect
@@ -223,13 +266,14 @@ fun MapStyleEditorScreen(editor: EditorState, demo: DemoDrive? = null) {
             vias = emptyList(),
             location = { live.point },
             bearing = { live.bearing },
+            ownGuidance = BuildConfig.AOSP,
+            speak = { voice?.speak(it) },
         )
-        GoogleNav.update(demo.instruction)
+        if (!BuildConfig.AOSP) GoogleNav.update(demo.instruction)
     }
 
     // The app opens on your location, so it asks for location up front (once; "Don't allow" just
     // leaves it starting on the default view). Re-checked on resume in case it's granted later.
-    val context = LocalContext.current
     var hasLocation by remember { mutableStateOf(hasLocationPermission(context)) }
     val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         hasLocation = hasLocationPermission(context)
@@ -255,6 +299,7 @@ fun MapStyleEditorScreen(editor: EditorState, demo: DemoDrive? = null) {
                     editor = editor,
                     drive = drive,
                     live = live,
+                    speak = { voice?.speak(it) },
                     hasLocation = hasLocation,
                     menuOpen = menuOpen,
                     onMenuOpenChange = { menuOpen = it },
@@ -286,6 +331,25 @@ private fun lastKnownPoint(context: Context): Point? {
         ?.let { Point.fromLngLat(it.longitude, it.latitude) }
 }
 
+/**
+ * Drive time from [here] to [to], for the suggestions. On aosp (head units, which start the app
+ * on every drive) answers are kept for half an hour per destination, so starting the car doesn't
+ * cost a Directions request each time.
+ */
+private suspend fun driveMinutes(context: Context, here: Point, to: Point): Int? {
+    if (!BuildConfig.AOSP) return fetchDriveMinutes(MapboxAccount.token, here, to)
+    val prefs = context.getSharedPreferences("drive_minutes", Context.MODE_PRIVATE)
+    val key = "%.4f,%.4f".format(java.util.Locale.US, to.latitude(), to.longitude())
+    prefs.getString(key, null)?.split('|')?.takeIf { it.size == 4 }?.let { (minutes, at, lat, lng) ->
+        val from = Point.fromLngLat(lng.toDouble(), lat.toDouble())
+        val fresh = System.currentTimeMillis() - at.toLong() < SUGGEST_REFRESH_MS
+        if (fresh && distanceMeters(from, here) < 1_000) return minutes.toInt()
+    }
+    val minutes = fetchDriveMinutes(MapboxAccount.token, here, to) ?: return null
+    prefs.edit { putString(key, "$minutes|${System.currentTimeMillis()}|${here.latitude()}|${here.longitude()}") }
+    return minutes
+}
+
 /** Latest puck position and travel direction, written by the map and read by the drive session. */
 class LiveLocation {
     @Volatile var point: Point? = null
@@ -296,9 +360,15 @@ class LiveLocation {
  * Returns the "Drive" action: make sure we have location and notification access, start Google
  * Maps navigating to the place, then bring this app back on top in drive mode while Google Maps
  * keeps guiding (and speaking) in the background.
+ *
+ * The aosp build (no Google Maps) only needs location: MinMap guides by itself, with [voice].
  */
 @Composable
-private fun rememberDriveStarter(live: LiveLocation, onStarted: (DriveSession) -> Unit): (Place) -> Unit {
+private fun rememberDriveStarter(
+    live: LiveLocation,
+    voice: GuidanceVoice?,
+    onStarted: (DriveSession) -> Unit,
+): (Place) -> Unit {
     val context = LocalContext.current
     var pending by remember { mutableStateOf<Place?>(null) }
     var askAccess by remember { mutableStateOf(false) }
@@ -358,11 +428,53 @@ private fun rememberDriveStarter(live: LiveLocation, onStarted: (DriveSession) -
         ReturnToApp.arm()
     }
 
+    /**
+     * MinMap navigating by itself. One Directions request starts the drive: the fastest route, with
+     * its spoken instructions, which also decides whether you have a usual way there. Only when you
+     * do is a second one made, through your usual roads.
+     */
+    suspend fun launchOwnDrive(place: Place) {
+        val token = MapboxAccount.token
+        val destination = Point.fromLngLat(place.longitude, place.latitude)
+        val here = live.point ?: lastKnownPoint(context)
+        val history = TripHistory(context)
+        val fastest = if (here == null) null else withTimeoutOrNull(10_000) {
+            fetchRoute(token, listOf(here, destination), live.bearing, guidance = true)
+        }
+        val vias = if (here == null || fastest == null) emptyList() else usualWayVias(history.all(), here, destination, fastest)
+        if (vias.isNotEmpty()) {
+            Toast.makeText(context, "Taking your usual way to ${place.name}", Toast.LENGTH_SHORT).show()
+        }
+        if (voice?.available == false) {
+            Toast.makeText(context, "No text-to-speech voice on this device, so turns are shown but not spoken.", Toast.LENGTH_LONG).show()
+        }
+        val startedAt = System.currentTimeMillis()
+        history.record(Trip(name = place.name, destination = destination, startedAt = startedAt, origin = here))
+        onStarted(
+            DriveSession(
+                token = token,
+                destination = destination,
+                startedAt = startedAt,
+                vias = vias,
+                location = { live.point },
+                bearing = { live.bearing },
+                ownGuidance = true,
+                initialRoute = fastest.takeIf { vias.isEmpty() },
+                speak = { voice?.speak(it) },
+            ),
+        )
+    }
+
     fun start(place: Place) {
         val hasLocation = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED
         if (!hasLocation) {
             pending = place
+            return
+        }
+        if (BuildConfig.AOSP) {
+            pending = null
+            scope.launch { launchOwnDrive(place) }
             return
         }
         if (!GoogleNav.hasNotificationAccess(context)) {
@@ -470,6 +582,8 @@ private fun MapWithSearch(
     editor: EditorState,
     drive: DriveSession?,
     live: LiveLocation,
+    /** Says something aloud (MinMap's own voice on aosp; nothing on the phone build). */
+    speak: (String) -> Unit,
     hasLocation: Boolean,
     menuOpen: Boolean,
     onMenuOpenChange: (Boolean) -> Unit,
@@ -531,13 +645,15 @@ private fun MapWithSearch(
         fun place(s: Suggestion) = Place(s.name, "", s.point.longitude(), s.point.latitude())
         suggestions = picks.map { SuggestedDrive(place(it), null) }
         if (here != null && picks.isNotEmpty()) {
-            suggestions = picks.map { SuggestedDrive(place(it), fetchDriveMinutes(MapboxAccount.token, here, it.point)) }
+            suggestions = picks.map { SuggestedDrive(place(it), driveMinutes(context, here, it.point)) }
         }
     }
     var robotaxiAreas by remember { mutableStateOf<Map<RobotaxiProvider, List<Feature>>>(emptyMap()) }
     LaunchedEffect(Unit) { robotaxiAreas = RobotaxiAreas.load(context) }
     val showRobotaxi = editor.showRobotaxi && robotaxiAreas.isNotEmpty()
-    val navInstruction by GoogleNav.current.collectAsState()
+    val googleInstruction by GoogleNav.current.collectAsState()
+    // Whoever is guiding: Google Maps (read from its notification), or MinMap itself on aosp.
+    val navInstruction = if (BuildConfig.AOSP) drive?.guidance else googleInstruction
     // Google's guidance as shown in the turn card and status bar, except that while usual-way stops
     // lie ahead its arrival time (which only covers the next stop) becomes the whole trip's.
     val shownInstruction = navInstruction?.let { nav ->
@@ -551,6 +667,37 @@ private fun MapWithSearch(
 
     var tappedPoi by remember { mutableStateOf<TappedPoi?>(null) }
     val view = LocalView.current
+
+    // "Navigate to Starbucks" / "stop navigation", by voice or from the phone page.
+    val voiceFinder = remember(MapboxAccount.token) { VoiceDestinations(MapboxAccount.token) { history.all() } }
+    val currentDrive by rememberUpdatedState(drive)
+    val currentOnDrive by rememberUpdatedState(onDrive)
+    val currentEnd by rememberUpdatedState {
+        // Ending here ends Google Maps' navigation too, using its own "Exit navigation" button.
+        runCatching { navInstruction?.exitAction?.send() }
+        endDrive()
+    }
+    val (voice, listen) = rememberVoiceAssistant(
+        handle = { command ->
+            when (command) {
+                VoiceCommand.Stop -> withContext(Dispatchers.Main) {
+                    if (currentDrive == null) VoiceOutcome.NothingToStop else {
+                        currentEnd()
+                        VoiceOutcome.Stopped
+                    }
+                }
+                is VoiceCommand.Navigate -> {
+                    val place = voiceFinder.find(command.query, viewport.cameraState?.center ?: live.point, live.point)
+                    if (place == null) VoiceOutcome.NotFound(command.query) else withContext(Dispatchers.Main) {
+                        tappedPoi = null
+                        currentOnDrive(place)
+                        VoiceOutcome.Driving(place)
+                    }
+                }
+            }
+        },
+        speak = speak,
+    )
 
     // The status bar now sits on the map, so its icons follow the map: light icons on dark maps.
     SideEffect {
@@ -606,13 +753,22 @@ private fun MapWithSearch(
                 if (path.size >= 5) history.attachPath(drive.startedAt, simplifyPath(path))
             }
         }
-        // When Google Maps' guidance goes away for good (arrived, or ended there), end ours too.
-        LaunchedEffect(drive) {
-            var lastSeen = 0L
-            while (true) {
-                if (GoogleNav.current.value != null) lastSeen = System.currentTimeMillis()
-                if (lastSeen > 0 && System.currentTimeMillis() - lastSeen > GUIDANCE_GONE_MS) endDrive()
-                delay(1_000)
+        if (BuildConfig.AOSP) {
+            // Arrived: leave "You have arrived" up for a moment, then back to the map.
+            LaunchedEffect(drive, drive.arrived) {
+                if (!drive.arrived) return@LaunchedEffect
+                delay(ARRIVED_LINGER_MS)
+                endDrive()
+            }
+        } else {
+            // When Google Maps' guidance goes away for good (arrived, or ended there), end ours too.
+            LaunchedEffect(drive) {
+                var lastSeen = 0L
+                while (true) {
+                    if (GoogleNav.current.value != null) lastSeen = System.currentTimeMillis()
+                    if (lastSeen > 0 && System.currentTimeMillis() - lastSeen > GUIDANCE_GONE_MS) endDrive()
+                    delay(1_000)
+                }
             }
         }
         DisposableEffect(view) {
@@ -622,7 +778,7 @@ private fun MapWithSearch(
         // Our own next turn in the status bar / Now Bar, kept in step with Google Maps' guidance.
         LaunchedEffect(drive, shownInstruction) { DriveNotification.show(context, shownInstruction) }
         DisposableEffect(drive) { onDispose { DriveNotification.cancel(context) } }
-        PictureInPictureNotice(guidanceStarted = navInstruction != null)
+        if (!BuildConfig.AOSP) PictureInPictureNotice(guidanceStarted = navInstruction != null)
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -669,11 +825,7 @@ private fun MapWithSearch(
                     following = following,
                     onToggleView = { closeUp = !closeUp },
                     onRecenter = { followKey++ },
-                    onEnd = {
-                        // Ending here ends Google Maps' navigation too, using its own "Exit navigation" button.
-                        runCatching { navInstruction?.exitAction?.send() }
-                        endDrive()
-                    },
+                    onEnd = currentEnd,
                 )
             }
         } else if (tappedPoi != null) {
@@ -712,10 +864,16 @@ private fun MapWithSearch(
                 },
                 near = { viewport.cameraState?.center ?: live.point },
                 here = { live.point },
+                onMic = if (voice.usable) listen else null,
                 // Lifted clear of the Mapbox logo and attribution button along the bottom edge.
                 modifier = Modifier.align(Alignment.BottomCenter).then(bars).padding(bottom = 40.dp),
             )
         }
+        // Above the search bar, or above the drive buttons while driving.
+        VoicePanel(
+            voice, hazeState, darkMap,
+            modifier = Modifier.align(Alignment.BottomCenter).then(bars).padding(start = 12.dp, end = 12.dp, bottom = 104.dp),
+        )
         if (drive == null) {
             // Last, so the menu and its button sit above everything else on the map.
             StyleMenu(editor, hazeState, open = menuOpen, onOpenChange = onMenuOpenChange, modifier = bars)
@@ -724,6 +882,7 @@ private fun MapWithSearch(
 }
 
 private const val GUIDANCE_GONE_MS = 10_000L
+private const val ARRIVED_LINGER_MS = 8_000L
 /** After you move the map mid-drive, the camera goes back to following you after this long. */
 private const val REFOLLOW_AFTER_MS = 8_000L
 private const val CLOSE_UP_ZOOM = 19.4

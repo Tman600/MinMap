@@ -1,5 +1,7 @@
 package com.example.mapstyleeditor.nav
 
+import android.graphics.Bitmap
+import androidx.annotation.VisibleForTesting
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -15,6 +17,11 @@ import java.util.Date
  * gets bent through each turn Google announces: if our next turns don't include Google's street,
  * find where that street meets our line and re-route through it. The stretch ahead of the driver
  * then always matches Google; further out it's Mapbox's best guess until the next turn arrives.
+ *
+ * With [ownGuidance] (the aosp build, no Google Maps) there's no one to follow: the session guides
+ * by itself from its route's steps, publishing [guidance] for the turn card and speaking each cue.
+ * That needs one Directions request per route and nothing per turn; leaving the route re-routes,
+ * less and less often if it keeps happening.
  */
 class DriveSession(
     private val token: String,
@@ -25,10 +32,24 @@ class DriveSession(
     vias: List<Point>,
     private val location: () -> Point?,
     private val bearing: () -> Double?,
+    private val ownGuidance: Boolean = false,
+    /** A route already fetched for this trip (with guidance), so the drive doesn't fetch it again. */
+    initialRoute: Route? = null,
+    private val speak: (String) -> Unit = {},
+    /** Draws the turn card's arrow (swapped out in tests, which have no Android graphics). */
+    private val arrowFor: (type: String, modifier: String?) -> Bitmap? = ::maneuverArrow,
 ) {
     /** Usual-way points not reached yet; our line keeps going through these, like Google does. */
     private var remainingVias = vias
-    var route by mutableStateOf<Route?>(null)
+    var route by mutableStateOf(initialRoute)
+        private set
+
+    /** MinMap's own next turn ([ownGuidance] only); null until there's a route. */
+    var guidance by mutableStateOf<NavInstruction?>(null)
+        private set
+
+    /** Reached the destination ([ownGuidance] only). */
+    var arrived by mutableStateOf(false)
         private set
 
     /**
@@ -41,22 +62,35 @@ class DriveSession(
 
     private var handledInstruction: String? = null
     private var offRouteChecks = 0
-    private var lastRouteAt = 0L
+    private var lastRouteAt = if (initialRoute != null) System.currentTimeMillis() else 0L
+    /** Waits between requests grow while they fail or keep being needed, and shrink back after. */
+    private var retryMs = RETRY_MS
+    private var rerouteCooldownMs = REROUTE_COOLDOWN_MS
+    private var onRouteSince = 0L
+    /** The route the voice cues below belong to, and how far along it they've been dealt with. */
+    private var spokenRoute: Route? = null
+    private var spokenUpTo = -1.0
+    private val arrows = HashMap<String, Bitmap?>()
 
     suspend fun run() {
-        while (true) {
+        while (!arrived) {
             tick()
-            delay(TICK_MS)
+            delay(if (ownGuidance) GUIDE_TICK_MS else TICK_MS)
         }
     }
 
-    private suspend fun tick() {
+    /** One look at where you are: guidance, cues, and rerouting. [run] calls it on a timer. */
+    @VisibleForTesting
+    internal suspend fun tick() {
         val here = location() ?: return
         remainingVias = remainingVias.filter { distanceMeters(it, here) > VIA_REACHED_METERS }
         val current = route
         if (current == null) {
             // First route (or retrying after a failed request, without hammering the API).
-            if (System.currentTimeMillis() - lastRouteAt > RETRY_MS) reroute(listOf(here) + remainingVias + destination)
+            if (System.currentTimeMillis() - lastRouteAt > retryMs) {
+                reroute(listOf(here) + remainingVias + destination)
+                retryMs = if (route == null) (retryMs * 2).coerceAtMost(MAX_WAIT_MS) else RETRY_MS
+            }
             return
         }
 
@@ -66,13 +100,25 @@ class DriveSession(
         tripArrival = if (remainingVias.isEmpty()) null else current.secondsLeft(along)?.let { seconds ->
             "Arrive " + DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(System.currentTimeMillis() + (seconds * 1000).toLong()))
         }
+        if (ownGuidance) guide(current, along)
+        if (arrived) return
+        val now = System.currentTimeMillis()
         offRouteChecks = if (off > OFF_ROUTE_METERS) offRouteChecks + 1 else 0
-        if (offRouteChecks >= 2 && System.currentTimeMillis() - lastRouteAt > REROUTE_COOLDOWN_MS) {
+        // Back on the route for a while: the next reroute may come quickly again.
+        if (offRouteChecks > 0) onRouteSince = 0L else if (onRouteSince == 0L) onRouteSince = now
+        if (onRouteSince > 0 && now - onRouteSince > CALM_MS) rerouteCooldownMs = REROUTE_COOLDOWN_MS
+        // Our own guidance checks every second, so it waits for a few seconds off the line (GPS
+        // jumps near tall buildings). A side trip back onto the line ahead never gets this far:
+        // locate() finds the nearest part of the whole route.
+        val needed = if (ownGuidance) 5 else 2
+        if (offRouteChecks >= needed && now - lastRouteAt > rerouteCooldownMs) {
             offRouteChecks = 0
             handledInstruction = null
             reroute(listOf(here) + remainingVias + destination)
+            if (ownGuidance) rerouteCooldownMs = (rerouteCooldownMs * 2).coerceAtMost(MAX_WAIT_MS)
             return
         }
+        if (ownGuidance) return
 
         val nav = GoogleNav.current.value ?: return
         val street = nav.street ?: return
@@ -117,8 +163,8 @@ class DriveSession(
         replacingMeters: Double? = null,
     ) {
         lastRouteAt = System.currentTimeMillis()
-        val next = fetchRoute(token, stops, bearing(), stopBearings)
-            ?: (if (stopBearings.isNotEmpty()) fetchRoute(token, stops, bearing()) else null)
+        val next = fetchRoute(token, stops, bearing(), stopBearings, guidance = ownGuidance)
+            ?: (if (stopBearings.isNotEmpty()) fetchRoute(token, stops, bearing(), guidance = ownGuidance) else null)
             ?: return
         if (replacingMeters != null) {
             val extra = next.cumulative.last() - replacingMeters
@@ -127,8 +173,52 @@ class DriveSession(
         route = next
     }
 
+    /** Our own next turn, its spoken cues, and arriving. */
+    private fun guide(current: Route, along: Double) {
+        val total = current.cumulative.last()
+        if (remainingVias.isEmpty() && total - along < ARRIVED_METERS) {
+            // "You have arrived", unless it was already said on the way in.
+            current.steps.flatMap { it.voice }.lastOrNull()?.takeIf { it.alongMeters >= spokenUpTo }?.let { speak(it.text) }
+            arrived = true
+            return
+        }
+
+        // Each cue once, as you pass its spot. One passed long ago (GPS gap, a fresh route that
+        // starts mid-step) is skipped rather than read out late.
+        if (current !== spokenRoute) {
+            spokenRoute = current
+            spokenUpTo = -1.0
+        }
+        val due = current.steps.flatMap { it.voice }.filter { it.alongMeters in spokenUpTo..along }
+        due.lastOrNull()?.let { cue ->
+            spokenUpTo = cue.alongMeters + 0.01
+            if (along - cue.alongMeters < STALE_CUE_METERS) speak(cue.text)
+        }
+
+        val next = current.steps.firstOrNull { it.alongMeters > along + 5 && it.type != "depart" } ?: return
+        val toTurn = next.alongMeters - along
+        guidance = NavInstruction(
+            instruction = next.instruction.ifBlank { next.names.firstOrNull().orEmpty() },
+            distanceText = formatDistance(toTurn),
+            distanceMeters = toTurn,
+            street = next.names.firstOrNull(),
+            arrival = current.secondsLeft(along)?.let { seconds ->
+                "Arrive " + DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(System.currentTimeMillis() + (seconds * 1000).toLong()))
+            },
+            arrow = arrows.getOrPut(next.type + "|" + next.modifier) { arrowFor(next.type, next.modifier) },
+            exitAction = null,
+        )
+    }
+
     private companion object {
         const val TICK_MS = 2_000L
+        const val GUIDE_TICK_MS = 1_000L
+        const val ARRIVED_METERS = 30.0
+        const val STALE_CUE_METERS = 200.0
+        /** Longest wait between route requests when they keep failing or keep being needed. */
+        const val MAX_WAIT_MS = 180_000L
+        /** On the route this long and reroutes are allowed at the normal pace again. */
+        const val CALM_MS = 60_000L
         const val OFF_ROUTE_METERS = 60.0
         // Each reroute is a Directions request on the user's Mapbox account.
         const val REROUTE_COOLDOWN_MS = 20_000L

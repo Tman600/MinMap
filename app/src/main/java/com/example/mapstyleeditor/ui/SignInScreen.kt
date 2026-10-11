@@ -61,6 +61,15 @@ import com.example.mapstyleeditor.R
 import com.example.mapstyleeditor.account.MapboxAccount
 import com.example.mapstyleeditor.account.TokenCheck
 import com.example.mapstyleeditor.account.checkToken
+import com.example.mapstyleeditor.BuildConfig
+import com.example.mapstyleeditor.account.TokenHandoff
+import android.os.Handler
+import android.os.Looper
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -96,19 +105,9 @@ fun SignInScreen() {
         }
     }
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .imePadding()
-            .verticalScroll(rememberScrollState()),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            Modifier.widthIn(max = 420.dp).fillMaxWidth().padding(horizontal = 28.dp, vertical = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
+    // Android without Google (head units): also offer the QR code, so the token can come from a phone.
+    val manual: @Composable (Modifier) -> Unit = { modifier ->
+        Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
             Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, modifier = Modifier.size(112.dp))
             Text("MinMap", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
@@ -191,11 +190,98 @@ fun SignInScreen() {
 
             Spacer(Modifier.height(20.dp))
             Text(
-                "Your token stays on this phone. Map loads and searches count toward your own Mapbox free tier.",
+                "Your token stays on this ${if (BuildConfig.AOSP) "device" else "phone"}. Map loads and searches count toward your own Mapbox free tier.",
                 color = Muted,
                 fontSize = 12.sp,
                 textAlign = TextAlign.Center,
             )
+        }
+    }
+
+    BoxWithConstraints(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .imePadding(),
+    ) {
+        val wide = maxWidth >= 640.dp
+        Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = Alignment.Center) {
+            val column = Modifier.widthIn(max = 420.dp).fillMaxWidth().padding(horizontal = 28.dp, vertical = 32.dp)
+            when {
+                !BuildConfig.AOSP -> manual(column)
+                wide -> Row(
+                    Modifier.padding(horizontal = 24.dp, vertical = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    PhoneHandoff(Modifier.widthIn(max = 300.dp))
+                    manual(Modifier.widthIn(max = 400.dp).padding(vertical = 8.dp))
+                }
+                else -> Column(column, horizontalAlignment = Alignment.CenterHorizontally) {
+                    PhoneHandoff(Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(32.dp))
+                    manual(Modifier.fillMaxWidth())
+                }
+            }
+        }
+    }
+}
+
+/**
+ * "Scan with your phone": a QR code of a one-time page this device serves on the local network,
+ * where the phone pastes the token (see TokenHandoff). Signs in as soon as a good token arrives.
+ */
+@Composable
+private fun PhoneHandoff(modifier: Modifier) {
+    val context = LocalContext.current
+    val handoff = remember {
+        TokenHandoff { token, user ->
+            Handler(Looper.getMainLooper()).post { MapboxAccount.signIn(context, token, user) }
+        }
+    }
+    var url by remember { mutableStateOf<String?>(null) }
+    DisposableEffect(handoff) {
+        runCatching { handoff.start() }
+        onDispose { handoff.stop() }
+    }
+    // The network can come and go (a hotspot switched on after the app opened), so keep looking.
+    LaunchedEffect(handoff) {
+        while (true) {
+            url = handoff.url()
+            delay(3_000)
+        }
+    }
+
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("Use your phone", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Scan this, sign in to Mapbox there, and paste the token on your phone instead.",
+            color = Muted,
+            fontSize = 14.sp,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(16.dp))
+        val link = url
+        if (link != null) {
+            QrCode(link, Modifier.size(220.dp))
+            Spacer(Modifier.height(10.dp))
+            Text(link, color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(4.dp))
+            Text("Your phone needs to be on the same Wi-Fi, or be this device's hotspot.", color = Muted, fontSize = 12.sp, textAlign = TextAlign.Center)
+        } else {
+            Box(
+                Modifier.size(220.dp).border(1.dp, Color(0xFF3A3A40), RoundedCornerShape(16.dp)).padding(20.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    "Connect this device to Wi-Fi or your phone's hotspot to show the code.",
+                    color = Muted,
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
     }
 }

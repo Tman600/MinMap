@@ -8,6 +8,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.asin
 import kotlin.math.atan2
@@ -16,8 +17,23 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-/** One maneuver on our route: the road it turns onto, and how far along the route it is. */
-data class RouteStep(val names: List<String>, val alongMeters: Double)
+/**
+ * One maneuver on our route: the road it turns onto, and how far along the route it is. Routes
+ * fetched with guidance (MinMap navigating by itself) also carry what to show and say for it.
+ */
+data class RouteStep(
+    val names: List<String>,
+    val alongMeters: Double,
+    /** Mapbox's written instruction, e.g. "Turn right onto Main Street". */
+    val instruction: String = "",
+    /** Mapbox maneuver type ("turn", "arrive", "roundabout"...) and modifier ("left", "slight right"...). */
+    val type: String = "",
+    val modifier: String? = null,
+    /** What to say while driving this step, and where (meters along the route) to say it. */
+    val voice: List<VoiceCue> = emptyList(),
+)
+
+data class VoiceCue(val alongMeters: Double, val text: String)
 
 /**
  * A Mapbox route line plus its maneuvers. [cumulative] is the distance from the start to each point;
@@ -112,6 +128,8 @@ suspend fun fetchRoute(
     stops: List<Point>,
     startBearing: Double? = null,
     stopBearings: Map<Int, Double> = emptyMap(),
+    /** Also ask for spoken instructions (same request, no extra cost), for MinMap's own guidance. */
+    guidance: Boolean = false,
 ): Route? = withContext(Dispatchers.IO) {
     runCatching {
         val coords = stops.joinToString(";") { "${it.longitude()},${it.latitude()}" }
@@ -120,31 +138,77 @@ suspend fun fetchRoute(
             "&bearings=" + headings.joinToString(";") { h -> h?.let { "${((it % 360 + 360) % 360).toInt()},45" }.orEmpty() }
         }
         val waypoints = if (stops.size > 2) "&waypoints=0;${stops.size - 1}" else ""
+        val voice = if (!guidance) "" else {
+            "&voice_instructions=true&voice_units=${if (usesMiles()) "imperial" else "metric"}&language=${Locale.getDefault().language}"
+        }
         val json = httpGet(
             "https://api.mapbox.com/directions/v5/mapbox/driving-traffic/$coords" +
-                "?geometries=geojson&overview=full&steps=true&annotations=duration$bearings$waypoints&access_token=$token",
+                "?geometries=geojson&overview=full&steps=true&annotations=duration$bearings$waypoints$voice&access_token=$token",
         ) ?: return@runCatching null
-        val route = JSONObject(json).getJSONArray("routes").optJSONObject(0) ?: return@runCatching null
-        val points = route.getJSONObject("geometry").getJSONArray("coordinates").toPoints()
-        val shell = Route(points, emptyList())
-        val steps = mutableListOf<RouteStep>()
-        val seconds = mutableListOf<Double>()
-        val legs = route.getJSONArray("legs")
-        for (l in 0 until legs.length()) {
-            legs.getJSONObject(l).optJSONObject("annotation")?.optJSONArray("duration")?.let { d ->
-                for (i in 0 until d.length()) seconds += d.getDouble(i)
-            }
-            val legSteps = legs.getJSONObject(l).getJSONArray("steps")
-            for (s in 0 until legSteps.length()) {
-                val step = legSteps.getJSONObject(s)
-                val loc = step.getJSONObject("maneuver").getJSONArray("location")
-                val names = listOf("name", "ref", "destinations", "exits")
-                    .mapNotNull { step.optString(it).takeIf(String::isNotBlank) }
-                steps += RouteStep(names, shell.locate(Point.fromLngLat(loc.getDouble(0), loc.getDouble(1))).first)
-            }
-        }
-        Route(points, steps, seconds.toDoubleArray())
+        parseRoute(json)
     }.getOrNull()
+}
+
+/** A Directions API response's first route as a [Route]; null if it has none. */
+internal fun parseRoute(json: String): Route? {
+    val route = JSONObject(json).getJSONArray("routes").optJSONObject(0) ?: return null
+    val points = route.getJSONObject("geometry").getJSONArray("coordinates").toPoints()
+    val shell = Route(points, emptyList())
+    val steps = mutableListOf<RouteStep>()
+    val seconds = mutableListOf<Double>()
+    val legs = route.getJSONArray("legs")
+    for (l in 0 until legs.length()) {
+        legs.getJSONObject(l).optJSONObject("annotation")?.optJSONArray("duration")?.let { d ->
+            for (i in 0 until d.length()) seconds += d.getDouble(i)
+        }
+        val legSteps = legs.getJSONObject(l).getJSONArray("steps")
+        for (s in 0 until legSteps.length()) {
+            val step = legSteps.getJSONObject(s)
+            val maneuver = step.getJSONObject("maneuver")
+            val loc = maneuver.getJSONArray("location")
+            val names = listOf("name", "ref", "destinations", "exits")
+                .mapNotNull { step.optString(it).takeIf(String::isNotBlank) }
+            steps += RouteStep(
+                names = names,
+                alongMeters = shell.locate(Point.fromLngLat(loc.getDouble(0), loc.getDouble(1))).first,
+                instruction = maneuver.optString("instruction"),
+                type = maneuver.optString("type"),
+                modifier = maneuver.optString("modifier").takeIf(String::isNotBlank),
+                // Placed once every step's start is known (a cue counts back from its step's end).
+                voice = step.optJSONArray("voiceInstructions")?.let { cues ->
+                    (0 until cues.length()).map { cues.getJSONObject(it) }.map {
+                        VoiceCue(it.getDouble("distanceAlongGeometry"), it.getString("announcement"))
+                    }
+                }.orEmpty(),
+            )
+        }
+    }
+    // Voice cues come as "meters before the end of this step"; make them meters along the route.
+    val total = shell.cumulative.last()
+    val placed = steps.mapIndexed { i, step ->
+        val end = steps.getOrNull(i + 1)?.alongMeters ?: total
+        step.copy(voice = step.voice.map { it.copy(alongMeters = (end - it.alongMeters).coerceAtLeast(step.alongMeters)) })
+    }
+    return Route(points, placed, seconds.toDoubleArray())
+}
+
+/** Whether distances are given in miles and feet here (US, UK, Liberia, Myanmar), else kilometers. */
+fun usesMiles(): Boolean = Locale.getDefault().country in setOf("US", "GB", "LR", "MM")
+
+/** A distance as shown in the turn card: "500 ft" / "0.3 mi", or "200 m" / "1.2 km". */
+fun formatDistance(meters: Double): String = if (usesMiles()) {
+    val miles = meters / 1609.344
+    when {
+        miles < 0.1 -> "${(meters / 0.3048 / 50).roundToInt().coerceAtLeast(1) * 50} ft"
+        miles < 10 -> String.format(Locale.US, "%.1f mi", miles)
+        else -> "${miles.roundToInt()} mi"
+    }
+} else {
+    when {
+        meters < 1000 -> "${(meters / 10).roundToInt().coerceAtLeast(1) * 10} m"
+        meters < 10_000 -> String.format(Locale.US, "%.1f km", meters / 1000)
+        else -> "${(meters / 1000).roundToInt()} km"
+    }
 }
 
 /** Current driving time (with traffic) from [from] to [to], in whole minutes. Null if it can't be had. */

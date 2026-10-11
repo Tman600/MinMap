@@ -13,6 +13,8 @@
     <!-- The live next-turn chip in the status bar while driving (a promoted "Live Update"). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
+    <!-- "Navigate to..." by voice. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!-- The Google Maps navigation intent is matched by package, so Maps must be visible to us. -->
     <queries>
@@ -21,6 +23,10 @@
         <package android:name="com.waymo.carapp" />
         <package android:name="com.tesla.riders" />
         <package android:name="com.zoox.android.ride" />
+        <!-- The device's speech recognizer, for voice commands (Android 11+ hides it otherwise). -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
     </queries>
 
     <application
