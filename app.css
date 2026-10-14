@@ -307,3 +307,17 @@ body[data-video="right"] .menu { right: calc(50% + 96px); }
 
 a.btn { text-decoration: none; }
 .mirror-box { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; padding-top: 16px; border-top: 1px solid var(--line); }
+
+/* ---- connection check ---- */
+.check-page { overflow: auto; }
+.ck { max-width: 1100px; margin: 0 auto; padding: 32px 24px; display: flex; flex-direction: column; gap: 14px; }
+.ck h1 { font-size: 32px; }
+.ck-list { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.ck-row { display: grid; grid-template-columns: 64px 300px 1fr; align-items: baseline; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 20px; }
+.ck-state { font-weight: 800; text-align: center; border-radius: 8px; padding: 2px 0; background: var(--button); }
+.ck-state.ok { background: var(--ok); color: #fff; }
+.ck-state.bad { background: var(--danger); color: #fff; }
+.ck-state.wait { animation: pulse 1.4s ease-in-out infinite; }
+.ck-detail { font-size: 17px; word-break: break-word; }
+.ck-video { width: 64px; height: 36px; }
+@media (max-width: 700px) { .ck-row { grid-template-columns: 52px 1fr; } .ck-detail { grid-column: 2; } }

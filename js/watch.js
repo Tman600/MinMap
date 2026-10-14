@@ -48,7 +48,9 @@ export class Watch {
       this.qr,
       el('div', { class: 'or muted' }, 'or open this page on the phone and enter'),
       this.codeEl, this.urlEl, this.pairStatus,
-      el('button', { class: 'btn ghost small', onclick: () => this.newCode() }, 'New code'))
+      el('div', { class: 'row' },
+        el('button', { class: 'btn ghost small', onclick: () => this.newCode() }, 'New code'),
+        el('a', { class: 'btn ghost small', href: location.pathname + '#check', onclick: () => setTimeout(() => location.reload(), 0) }, 'Not connecting? Run a check')))
 
     this.titleEl = el('div', { class: 'title' })
     this.timeEl = el('div', { class: 'time muted' })
