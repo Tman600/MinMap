@@ -31,7 +31,11 @@ whitespace and `/` not escaped. sig is BIP340 Schnorr. Receivers drop:
 
 ## Messages
 
-- `{"t":"offer","id":<offer id>,"from":<phone id>,"sdp":<offer SDP>}`. The phone sends this
+- `{"t":"offer","id":<offer id>,"from":<phone id>,"sdp":<offer SDP>,"ice":[...]?}`. `ice` is
+  optional. When the phone has a TURN relay set up (the owner's Cloudflare key, kept on the phone),
+  it holds short-lived `{urls, username, credential}` entries. The car adds them to its own ICE
+  servers, so both ends can meet through the relay when the network blocks a direct link. The
+  phone sends this
   every 3 s until answered, then every 12 s after 2 minutes.
 - `{"t":"answer","id":<offer id>,"to":<phone id>,"sdp":<answer SDP>}`. The car resends the same
   answer if the same offer id arrives again.

@@ -142,6 +142,14 @@ function describeLink(offerSdp, answerSdp) {
   return 'Phone offered: ' + list(offerSdp) + '. Car offered: ' + list(answerSdp) + '.'
 }
 
+// TURN relay servers the phone sent in its (encrypted) offer, with short-lived credentials from
+// the phone owner's own relay account. Only well-formed turn/stun entries are used.
+function relayServers(list) {
+  if (!Array.isArray(list)) return []
+  return list.filter(s => s && s.urls && [].concat(s.urls).every(u => /^(turns?|stun):/.test(String(u))))
+    .map(s => ({ urls: [].concat(s.urls).map(String), username: s.username, credential: s.credential }))
+}
+
 // ---- the car: answers a phone's offer and shows its stream ----
 
 export class Receiver {
@@ -174,7 +182,10 @@ export class Receiver {
 
   async answer(m) {
     this.drop()
-    const pc = new RTCPeerConnection({ iceServers: ICE })
+    // ?relayonly forces everything through the relay: a test of the path strict networks use.
+    const relay = relayServers(m.ice)
+    const relayOnly = relay.length > 0 && /[?&]relayonly\b/.test(location.search)
+    const pc = new RTCPeerConnection({ iceServers: ICE.concat(relay), iceTransportPolicy: relayOnly ? 'relay' : 'all' })
     this.pc = pc
     this.peer = m.from
     const stream = new MediaStream()
