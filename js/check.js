@@ -79,17 +79,32 @@ export async function start() {
 
   // Which kinds of network address this browser finds: host = local, srflx = public via STUN.
   const ice = row('Network addresses (ICE)')
+  const nat = row('Network type')
   try {
     const pc = new RTCPeerConnection({ iceServers: ICE })
     pc.createDataChannel('x')
     const types = {}
-    pc.onicecandidate = e => { if (e.candidate) { const t = e.candidate.candidate.split(' ')[7]; types[t] = (types[t] || 0) + 1 } }
+    const publics = []
+    pc.onicecandidate = e => {
+      if (!e.candidate) return
+      const f = e.candidate.candidate.split(' ')
+      types[f[7]] = (types[f[7]] || 0) + 1
+      if (f[7] === 'srflx' && f[2].toLowerCase() === 'udp') publics.push({ ip: f[4], port: f[5] })
+    }
     await pc.setLocalDescription(await pc.createOffer())
     await Promise.race([new Promise(r => pc.addEventListener('icegatheringstatechange', () => pc.iceGatheringState === 'complete' && r())), new Promise(r => setTimeout(r, 6000))])
     pc.close()
     const text = Object.entries(types).map(([k, v]) => k + ' \u00d7' + v).join(', ') || 'none'
     types.srflx ? ice.ok(text) : ice.fail(text + ' (no public address: UDP to STUN may be blocked)')
-  } catch (e) { ice.fail(e.message) }
+    // One local socket asked two STUN servers. The same public IP with different ports means the
+    // network gives each destination its own port (symmetric NAT), which blocks direct links.
+    const byIp = {}
+    for (const p of publics) (byIp[p.ip] ||= new Set()).add(p.port)
+    const strict = (types.host || 0) <= 1 && Object.values(byIp).some(ports => ports.size > 1)
+    if (!publics.length) nat.info('unknown')
+    else if (strict) nat.fail('strict (symmetric NAT): a phone on mobile data can\u2019t link to it directly. Use the phone\u2019s hotspot.')
+    else nat.ok('open enough for direct links')
+  } catch (e) { ice.fail(e.message); nat.info('unknown') }
 
   // Two connections inside this page talking to each other: does WebRTC itself work here?
   const loop = row('WebRTC loopback')

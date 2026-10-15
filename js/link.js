@@ -177,7 +177,8 @@ export class Receiver {
       if (this.pc !== pc) return
       const s = pc.connectionState
       if (s === 'connected') this.on.onState?.('connected')
-      else if (s === 'failed' || s === 'closed') this.drop()
+      else if (s === 'failed') { this.on.onState?.('blocked'); this.drop() }
+      else if (s === 'closed') this.drop()
     }
     try {
       await pc.setRemoteDescription({ type: 'offer', sdp: m.sdp })

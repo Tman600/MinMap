@@ -127,6 +127,10 @@ export class Watch {
       },
       onStatus: s => this.showState(s),
       onState: state => {
+        // 'blocked': the phone answered the pairing but no direct link formed (strict NAT).
+        if (state === 'blocked') { this.blocked = true; return }
+        if (state === 'connected') this.blocked = false
+        this.phase = state
         this.linked = state === 'connected'
         // Only a dropped link clears the picture; tracks arrive before the link is up.
         if (state === 'waiting') { this.state = null; this.picture = false; this.videoEl.srcObject = null }
@@ -181,9 +185,14 @@ export class Watch {
     if (this.linked) {
       this.pairStatus.className = 'status ok'
       this.pairStatus.textContent = 'Phone connected. Choose a video or start mirroring on the phone.'
+    } else if (this.phase === 'connecting') {
+      this.pairStatus.className = 'status wait'
+      this.pairStatus.textContent = 'Phone found. Setting up the video link\u2026'
     } else {
       this.pairStatus.className = 'status wait'
-      this.pairStatus.textContent = this.receiver ? 'Waiting for a phone\u2026' : 'Not connected'
+      this.pairStatus.textContent = !this.receiver ? 'Not connected'
+        : this.blocked ? 'Found the phone, but the network blocked the direct video link. Connect the car to the phone\u2019s hotspot, then try again.'
+        : 'Waiting for a phone\u2026'
     }
     if (!showing) { this.titleEl.textContent = this.linked ? 'Phone connected' : 'No phone yet'; this.timeEl.textContent = '' }
   }
