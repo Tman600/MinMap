@@ -102,7 +102,7 @@ export async function start() {
     for (const p of publics) (byIp[p.ip] ||= new Set()).add(p.port)
     const strict = (types.host || 0) <= 1 && Object.values(byIp).some(ports => ports.size > 1)
     if (!publics.length) nat.info('unknown')
-    else if (strict) nat.fail('strict (symmetric NAT): a phone on mobile data can\u2019t link to it directly. Use the phone\u2019s hotspot.')
+    else if (strict) nat.fail('strict (symmetric NAT): a phone elsewhere can\u2019t link to it directly. On the phone\u2019s hotspot this line still says NO, but pairing can work there, so try pairing.')
     else nat.ok('open enough for direct links')
   } catch (e) { ice.fail(e.message); nat.info('unknown') }
 
