@@ -128,6 +128,20 @@ export function stereoOpus(sdp) {
     'a=fmtp:' + pt + ' ' + params.replace(/;?(stereo|sprop-stereo|maxaveragebitrate)=[^;]*/g, '') + ';stereo=1;sprop-stereo=1;maxaveragebitrate=192000')
 }
 
+// What each side offered, for the car's "blocked" message. Read from the offer and answer,
+// which survive the connection closing. Types: host = on the device, srflx = public (via STUN).
+function describeLink(offerSdp, answerSdp) {
+  const list = sdp => {
+    const seen = new Set()
+    for (const line of (sdp || '').split(/\r?\n/)) {
+      const f = line.match(/^a=candidate:\S+ \d+ (\S+) \d+ (\S+) \d+ typ (\S+)/i)
+      if (f) seen.add(f[3] + ' ' + f[2] + (f[1].toLowerCase() === 'tcp' ? ' (tcp)' : ''))
+    }
+    return [...seen].join(', ') || 'none'
+  }
+  return 'Phone offered: ' + list(offerSdp) + '. Car offered: ' + list(answerSdp) + '.'
+}
+
 // ---- the car: answers a phone's offer and shows its stream ----
 
 export class Receiver {
@@ -177,7 +191,7 @@ export class Receiver {
       if (this.pc !== pc) return
       const s = pc.connectionState
       if (s === 'connected') this.on.onState?.('connected')
-      else if (s === 'failed') { this.on.onState?.('blocked'); this.drop() }
+      else if (s === 'failed') { this.on.onState?.('blocked', describeLink(m.sdp, pc.localDescription?.sdp || this.lastAnswer)); this.drop() }
       else if (s === 'closed') this.drop()
     }
     try {
@@ -186,6 +200,7 @@ export class Receiver {
       await pc.setLocalDescription({ type: 'answer', sdp: stereoOpus(ans.sdp) })
       await iceGathered(pc)
       this.on.onState?.('connecting')
+      this.lastAnswer = pc.localDescription.sdp
       return { t: 'answer', id: m.id, to: m.from, sdp: pc.localDescription.sdp }
     } catch (e) {
       console.warn('MinMap: could not answer the phone', e)

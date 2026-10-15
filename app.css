@@ -321,3 +321,5 @@ a.btn { text-decoration: none; }
 .ck-detail { font-size: 17px; word-break: break-word; }
 .ck-video { width: 64px; height: 36px; }
 @media (max-width: 700px) { .ck-row { grid-template-columns: 52px 1fr; } .ck-detail { grid-column: 2; } }
+.link-detail { font-size: 14px; max-width: 520px; word-break: break-word; }
+.link-detail:empty { display: none; }

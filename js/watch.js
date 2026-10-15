@@ -42,12 +42,13 @@ export class Watch {
     this.codeEl = el('div', { class: 'code' })
     this.urlEl = el('div', { class: 'url muted' })
     this.pairStatus = el('div', { class: 'status wait' }, 'Waiting for a phone\u2026')
+    this.detailEl = el('div', { class: 'link-detail muted' })
     this.pair = el('div', { class: 'pair' },
       el('h2', {}, 'Watch from your phone'),
       el('p', { class: 'muted' }, 'Scan with the phone camera, pick a video there, and it plays here.'),
       this.qr,
       el('div', { class: 'or muted' }, 'or open this page on the phone and enter'),
-      this.codeEl, this.urlEl, this.pairStatus,
+      this.codeEl, this.urlEl, this.pairStatus, this.detailEl,
       el('div', { class: 'row' },
         el('button', { class: 'btn ghost small', onclick: () => this.newCode() }, 'New code'),
         el('a', { class: 'btn ghost small', href: location.pathname + '#check', onclick: () => setTimeout(() => location.reload(), 0) }, 'Not connecting? Run a check')))
@@ -126,10 +127,11 @@ export class Watch {
         this.playVideo()
       },
       onStatus: s => this.showState(s),
-      onState: state => {
+      onState: (state, info) => {
         // 'blocked': the phone answered the pairing but no direct link formed (strict NAT).
-        if (state === 'blocked') { this.blocked = true; return }
-        if (state === 'connected') this.blocked = false
+        // info lists the addresses both sides tried, shown small under the status.
+        if (state === 'blocked') { this.blocked = true; this.detailEl.textContent = info || ''; this.setPhase(); return }
+        if (state === 'connected') { this.blocked = false; this.detailEl.textContent = '' }
         this.phase = state
         this.linked = state === 'connected'
         // Only a dropped link clears the picture; tracks arrive before the link is up.
