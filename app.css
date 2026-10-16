@@ -323,3 +323,5 @@ a.btn { text-decoration: none; }
 @media (max-width: 700px) { .ck-row { grid-template-columns: 52px 1fr; } .ck-detail { grid-column: 2; } }
 .link-detail { font-size: 14px; max-width: 520px; word-break: break-word; }
 .link-detail:empty { display: none; }
+.phone-signin { display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 6px; }
+.phone-signin .qr { width: 200px; height: 200px; }

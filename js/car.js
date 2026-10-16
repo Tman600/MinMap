@@ -50,12 +50,24 @@ function signIn(message) {
     location.reload()
   }
   go.addEventListener('click', submit)
+  // Typing a token on a car screen is painful: send it from a phone instead (give.js).
+  const phoneBox = el('div', { class: 'phone-signin' },
+    el('button', { class: 'btn wide', onclick: async () => {
+      const { receiveToken } = await import('./give.js')
+      const got = await receiveToken(phoneBox)
+      const problem = await mb.checkToken(got.token)
+      got.close()
+      if (problem) { got.status.className = 'status'; got.status.textContent = problem + ' Reload this page on the car to try again.'; return }
+      store.set('token', got.token)
+      location.reload()
+    } }, 'Sign in with your phone'))
   input.addEventListener('keydown', e => { if (e.key === 'Enter') submit() })
   document.getElementById('app').replaceChildren(el('main', { class: 'signin' },
     el('img', { src: 'icon.svg', alt: '', class: 'signin-logo' }),
     el('h1', {}, 'MinMap'),
     el('p', { class: 'muted' }, 'MinMap draws its map with your own Mapbox account. Paste a public token (it starts with pk.) from account.mapbox.com, under Access tokens.'),
     input, err, go,
+    phoneBox,
     el('p', { class: 'fine' }, 'The token stays in this browser. Nothing is sent anywhere except Mapbox.'),
     el('button', { class: 'btn ghost small', onclick: () => { location.hash = '#watch'; location.reload() } }, 'Only watch phone video, no map')))
 }
