@@ -53,7 +53,9 @@ function signIn(message) {
   // Typing a token on a car screen is painful: send it from a phone instead (give.js).
   const phoneBox = el('div', { class: 'phone-signin' },
     el('button', { class: 'btn wide', onclick: async () => {
-      const { receiveToken } = await import('./give.js')
+      const { receiveToken } = await import('./give.js?v=22')
+      // Only the QR code matters now; the typing box and text would push it off a short car screen.
+      phoneBox.closest('.signin')?.classList.add('phone-mode')
       const got = await receiveToken(phoneBox)
       const problem = await mb.checkToken(got.token)
       got.close()

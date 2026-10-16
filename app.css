@@ -325,3 +325,10 @@ a.btn { text-decoration: none; }
 .link-detail:empty { display: none; }
 .phone-signin { display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 6px; }
 .phone-signin .qr { width: 200px; height: 200px; }
+
+/* Phone sign-in: show just the QR code, sized to fit a short, wide car screen. */
+body.signin-page { overflow: auto; }
+.signin.phone-mode { justify-content: flex-start; padding-top: 24px; align-items: center; text-align: center; }
+.signin.phone-mode > .token-input, .signin.phone-mode > .err, .signin.phone-mode > .btn, .signin.phone-mode > .fine, .signin.phone-mode > .signin-logo, .signin.phone-mode > p.muted { display: none; }
+.signin.phone-mode h1 { font-size: 26px; }
+.phone-signin .qr { width: min(260px, 45vh); height: min(260px, 45vh); }
