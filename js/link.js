@@ -36,8 +36,11 @@ export function prettyCode(code) {
   return code.slice(0, 4) + '-' + code.slice(4)
 }
 
+// The QR code's link. cast/ is its own path so Android can hand just these links to the MinMap
+// Mirror app (App Links, verified by tman600.github.io/.well-known/assetlinks.json); without the
+// app, cast/index.html forwards to this page's #cast view.
 export function castUrl(code) {
-  return location.origin + location.pathname + '#cast=' + code
+  return new URL('cast/#' + code, location.origin + location.pathname.replace(/[^/]*$/, '')).href
 }
 
 // ---- encrypted notes over Nostr ----
