@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Re-centre on your position (car map strip). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M12,8a4,4 0,1 0,0.01 0zM13,2v2.06A8,8 0,0 1,19.94 11H22v2h-2.06A8,8 0,0 1,13 19.94V22h-2v-2.06A8,8 0,0 1,4.06 13H2v-2h2.06A8,8 0,0 1,11 4.06V2zM12,6a6,6 0,1 0,0.01 0z" />
+</vector>

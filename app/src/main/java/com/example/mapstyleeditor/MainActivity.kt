@@ -101,6 +101,7 @@ import com.example.mapstyleeditor.ui.MapboxBlockedCard
 import com.example.mapstyleeditor.demo.DemoDrive
 import com.example.mapstyleeditor.update.AppUpdates
 import android.content.pm.ApplicationInfo
+import com.example.mapstyleeditor.starbase.OnDisplay
 import com.example.mapstyleeditor.starbase.STARBASE
 import com.example.mapstyleeditor.starbase.StarbaseLayers
 import com.example.mapstyleeditor.ui.glassStyle
@@ -491,14 +492,20 @@ private fun MapWithSearch(
             bearing(-20.0)
         }
     }
-    // Starbase: its 3D pads while the map is anywhere near it. Close in, Standard's own buildings
-    // there are switched off: it draws each launch tower as a plain 143 m block that would swallow
-    // the tower model.
+    // Starbase: its 3D pads (and the Starship in the build site's rocket garden) while the map is
+    // anywhere near it. Close in at the pads, Standard's own buildings there are switched off: it
+    // draws each launch tower as a plain 143 m block that would swallow the tower model. The build
+    // site, 3.5 km west, keeps Standard's Mega Bays beside the Starship until you're close in there
+    // too: Standard draws the ship and booster on display as plain cylinders that swallow both
+    // models, so its buildings go and MinMap's own open Mega Bays take their place.
     val showStarbase by remember {
         derivedStateOf { viewport.cameraState?.let { it.zoom >= 11 && distanceMeters(it.center, STARBASE) < 20_000 } == true }
     }
-    val atStarbase by remember {
-        derivedStateOf { viewport.cameraState?.let { it.zoom >= 13 && distanceMeters(it.center, STARBASE) < 4_000 } == true }
+    val atPads by remember {
+        derivedStateOf { viewport.cameraState?.let { it.zoom >= 13 && distanceMeters(it.center, STARBASE) < 2_000 } == true }
+    }
+    val atBuildSite by remember {
+        derivedStateOf { viewport.cameraState?.let { it.zoom >= 15 && distanceMeters(it.center, OnDisplay.SHIP.at) < 400 } == true }
     }
     // No last known position (fresh install, or location just granted): move to the first fix instead.
     LaunchedEffect(hasLocation) {
@@ -631,7 +638,7 @@ private fun MapWithSearch(
             hasLocation = hasLocation,
             closeUp = drive != null && closeUp,
             robotaxiAreas = if (showRobotaxi) robotaxiAreas else emptyMap(),
-            starbase = StarbaseView(show = showStarbase, hideBuildings = atStarbase),
+            starbase = StarbaseView(show = showStarbase, hideBuildings = atPads || atBuildSite, showBays = atBuildSite),
             onPoiClick = { if (drive == null) tappedPoi = it },
             onMapClick = { tappedPoi = null },
             modifier = Modifier.fillMaxSize().hazeSource(hazeState),
@@ -857,7 +864,9 @@ private fun StyledMap(
                 middleSlot = {
                     RobotaxiLayers(robotaxiAreas)
                     drive?.route?.let { RouteLayers(it) }
-                    if (starbase.show) StarbaseLayers(darkMap = style.light == LightPreset.NIGHT || style.light == LightPreset.DUSK)
+                    if (starbase.show) {
+                        StarbaseLayers(darkMap = style.light == LightPreset.NIGHT || style.light == LightPreset.DUSK, showBays = starbase.showBays)
+                    }
                 },
                 standardStyleState = standardStyle,
             )
@@ -906,8 +915,11 @@ private fun StyledMap(
     }
 }
 
-/** What StyledMap draws of Starbase: whether at all, and whether to hide Standard's buildings there. */
-private class StarbaseView(val show: Boolean, val hideBuildings: Boolean)
+/**
+ * What StyledMap draws of Starbase: whether at all, whether to hide Standard's buildings there, and
+ * whether to draw MinMap's own Mega Bays in their place.
+ */
+private class StarbaseView(val show: Boolean, val hideBuildings: Boolean, val showBays: Boolean)
 
 private const val MAX_ZOOM = 17.5
 private const val MAX_PITCH = 60.0
@@ -1041,6 +1053,7 @@ private fun StandardStyleConfigurationState.applyStyle(
     show3dLandmarks = shown(VisibilityTarget.LANDMARKS_3D)
     show3dTrees = shown(VisibilityTarget.TREES_3D)
     showLandmarkIcons = shown(VisibilityTarget.LANDMARK_ICONS)
+    showHdRoads = shown(VisibilityTarget.HD_ROADS)
 
     lightPreset = LightPresetValue(style.light.value)
     theme = ThemeValue(style.theme.value)

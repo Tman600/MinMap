@@ -21,8 +21,8 @@ android {
         applicationId = "app.minmap"
         minSdk = 26
         targetSdk = 36
-        versionCode = 9
-        versionName = "1.4.1"
+        versionCode = 10
+        versionName = "1.5"
     }
 
     // Also build a phone-only (arm64) APK next to the universal one. Mapbox's native engine is
@@ -79,6 +79,12 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.mapbox.maps)
     implementation(libs.mapbox.compose)
+    implementation(libs.mapbox.androidauto)
+    implementation(libs.androidx.car.app)
     implementation(libs.haze)
     implementation(libs.haze.blur)
+
+    testImplementation(libs.junit)
+    // Android's org.json is only a stub in local unit tests; the real one parses the Directions JSON.
+    testImplementation(libs.json)
 }

@@ -75,6 +75,8 @@ private fun inRing(ring: List<Point>, p: Point): Boolean {
  *
  * The app ships a snapshot so areas show offline and on first launch; a fresh copy is fetched at
  * most once a day and kept for next time. Operators expand often, so the snapshot ages quickly.
+ * The snapshot can also be newer than the published data (areas MinMap traced before the dataset
+ * caught up), so a download is used only once it was generated after the snapshot.
  */
 object RobotaxiAreas {
     private const val URL =
@@ -83,17 +85,20 @@ object RobotaxiAreas {
     private const val CACHE = "robotaxi-service-areas.json"
     private const val REFRESH_MS = 24 * 60 * 60 * 1000L
 
-    /** The best copy available right now: today's download, else the last one, else the bundled snapshot. */
+    /** The best copy available right now: the latest download, unless the bundled snapshot is newer. */
     suspend fun load(context: Context): Map<RobotaxiProvider, List<Feature>> = withContext(Dispatchers.IO) {
         val cache = File(context.filesDir, CACHE)
         val stale = !cache.exists() || System.currentTimeMillis() - cache.lastModified() > REFRESH_MS
         if (stale) {
             httpGet(URL)?.takeIf { runCatching { parse(it) }.getOrNull()?.isNotEmpty() == true }?.let(cache::writeText)
         }
-        val json = cache.takeIf { it.exists() }?.readText()
-            ?: context.assets.open(ASSET).bufferedReader().use { it.readText() }
+        val bundled = context.assets.open(ASSET).bufferedReader().use { it.readText() }
+        val json = cache.takeIf { it.exists() }?.readText()?.takeIf { generatedAt(it) > generatedAt(bundled) } ?: bundled
         runCatching { parse(json) }.getOrDefault(emptyMap())
     }
+
+    /** When the dataset was built, as its ISO 8601 timestamp (these sort as text); empty if unknown. */
+    private fun generatedAt(json: String): String = runCatching { JSONObject(json).optString("generatedAt") }.getOrDefault("")
 
     private fun parse(json: String): Map<RobotaxiProvider, List<Feature>> {
         val areas = JSONObject(json).getJSONArray("areas")

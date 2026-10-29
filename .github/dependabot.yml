@@ -1,0 +1,25 @@
+# Keeps MinMap on the latest Mapbox Maps SDK: when Mapbox publishes a new regular release (not an
+# -rc or -beta), Dependabot opens a pull request moving every com.mapbox library to it together.
+# Nothing ships on its own: merging and building a release is still done by hand, and phones then
+# pick it up through MinMap's Updates tab.
+version: 2
+registries:
+  mapbox:
+    type: maven-repository
+    url: https://api.mapbox.com/downloads/v2/releases/maven
+updates:
+  - package-ecosystem: gradle
+    directory: "/"
+    registries:
+      - mapbox
+    schedule:
+      interval: daily
+    allow:
+      - dependency-name: "com.mapbox.*"
+    groups:
+      mapbox:
+        patterns:
+          - "com.mapbox.*"
+    commit-message:
+      prefix: "Mapbox"
+    open-pull-requests-limit: 2

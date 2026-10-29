@@ -55,6 +55,34 @@ val STARBASE_PARTS: List<PlacedPart> = Pad.entries.flatMap { pad ->
     )
 }
 
+/**
+ * Starship standing in the build site's rocket garden, off to the side of the launch site by Highway 4:
+ * the ship and booster that are on display there, each on its spot in OpenStreetMap ("S20", "B12").
+ * The models' origin is the base of the vehicle, so they stand on the ground as they are.
+ */
+enum class OnDisplay(val asset: String, val at: Point, val heading: Double) {
+    // The ship's flaps span its model's x axis (east, unturned). Turned to run along Highway 4 (a
+    // bearing of about 47° there), so they show face-on from the road.
+    SHIP("ship", Point.fromLngLat(-97.190145, 25.985905), -43.0),
+    BOOSTER("booster", Point.fromLngLat(-97.190395, 25.985705), 0.0);
+
+    val key get() = "minmap-starbase-display-${name.lowercase()}"
+}
+
+/**
+ * The build site's Mega Bays, drawn close in where Standard's solid blocks are switched off: an open
+ * shell (tools/make-mega-bay.py) with a Super Heavy standing inside. The model's door side faces
+ * south unturned; turned to each bay's heading, it opens to the south-west, towards the rocket garden.
+ */
+enum class MegaBay(val at: Point, val heading: Double) {
+    // Centres of the footprints in OpenStreetMap ("Mega Bay", "Mega Bay 2"): both 53.5 m by 38 m,
+    // their long sides at a bearing of 134°.
+    BAY_1(Point.fromLngLat(-97.1883444, 25.9863559), 44.0),
+    BAY_2(Point.fromLngLat(-97.1886192, 25.9872295), 44.0);
+
+    val key get() = "minmap-starbase-${name.lowercase().replace('_', '-')}"
+}
+
 private fun rad(deg: Double) = deg * PI / 180
 
 /** The mount stands 22 m out from the tower. */

@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.5
+
+MinMap's biggest release yet.
+
+- **HD roads:** close in, roads show their lane lines, turn arrows, crossings and stop lines, and
+  raised roads, bridges and tunnels stand in 3D, in the cities Mapbox has mapped in that detail.
+  On by default; switch it off under Show / Hide ("Lane detail").
+- **Android Auto (preview)** has been added. To enable it: open Android Auto's settings on your
+  phone, tap "Version" ten times to turn on developer mode, then in the ⋮ menu open Developer
+  settings and turn on "Unknown sources". MinMap then shows up in the car's app list.
+- **Starship** and **Super Heavy** have been added back and now stand off Highway 4 by the Mega
+  Bays.
+- Mapbox Maps SDK 11.33.
+- **Newer robotaxi areas built in:** Tesla's larger Houston area and Circuit of the Americas in
+  Austin, and Waymo's October expansions in Los Angeles, Orlando and San Diego. MinMap still checks
+  Robotaxi Tracker daily and uses its data once it's newer.
+
 ## 1.4
 
 - **When Mapbox pauses your account:** accounts made without a card are on Mapbox's free demo, and

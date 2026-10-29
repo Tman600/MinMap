@@ -36,6 +36,9 @@ enum class VisibilityTarget(val label: String, val configKey: String) {
     LANDMARKS_3D("3D landmarks", "show3dLandmarks"),
     TREES_3D("3D trees", "show3dTrees"),
     LANDMARK_ICONS("Landmark icons", "showLandmarkIcons"),
+    // Mapbox's HD roads: lane lines, turn arrows, crossings and stop lines close in, and raised
+    // roads, bridges and tunnels in 3D, in the cities Mapbox has mapped that closely.
+    HD_ROADS("Lane detail (HD roads)", "showHdRoads"),
 }
 
 enum class LightPreset(val label: String, val value: String) {

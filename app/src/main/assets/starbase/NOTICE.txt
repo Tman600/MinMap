@@ -5,5 +5,9 @@ The 3D models in this folder are from munim-maps-vehicles 0.5.0 by Munim, Inc.
 Changes made for MinMap: starbase-tower.glb was split into tower.glb, carriage.glb (the frame the
 chopsticks ride on), arm-left.glb and arm-right.glb (the chopstick arms) and qd-arm.glb (the ship
 quick-disconnect arm), each moved so its origin is the point it turns about.
-starbase-mount.glb is unchanged (saved as mount.glb). The geometry and materials are otherwise as
-published.
+rocket-starship.glb was split into booster.glb and ship.glb (Super Heavy and Starship, each with its
+origin at the base of the vehicle). starbase-mount.glb is unchanged (saved as mount.glb). The
+geometry and materials are otherwise as published, except that booster.glb and ship.glb have their
+steel ("paint" and "weld" materials) recoloured a darker grey.
+
+mega-bay.glb is MinMap's own model (made by tools/make-mega-bay.py), not from munim-maps-vehicles.

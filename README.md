@@ -11,14 +11,14 @@ From version 1.3, MinMap keeps itself up to date: the **Updates** tab in its set
 Each release lists the SHA-256 checksum of its APK, also in [`SHA256SUMS`](SHA256SUMS). The latest:
 
 ```
-73e35d5f542b3690471d5b47854a0c723cd8667757b4852424763df4912d6c27  MinMap-1.4.1.apk
+074999559299660d29e18aa9f2380e50fc42f516f0e3899424723de831acac31  MinMap-1.5.apk
 ```
 
 Check it after downloading:
 
-- Windows: `certutil -hashfile MinMap-1.4.1.apk SHA256`
-- macOS: `shasum -a 256 MinMap-1.4.1.apk`
-- Linux: `sha256sum MinMap-1.4.1.apk`
+- Windows: `certutil -hashfile MinMap-1.5.apk SHA256`
+- macOS: `shasum -a 256 MinMap-1.5.apk`
+- Linux: `sha256sum MinMap-1.5.apk`
 
 Official releases are signed with the MinMap key. The signing certificate's SHA-256 fingerprint is:
 
@@ -30,13 +30,13 @@ Android checks this on every update: an update signed with any other key won't i
 
 ## Source code
 
-This repository is the exact source of each release: tag `v1.4.1` is what MinMap 1.4.1 was built from (and `v1.4`, `v1.3`, `v1.0.1` the earlier releases).
+This repository is the exact source of each release: tag `v1.5` is what MinMap 1.5 was built from (and `v1.4.1`, `v1.4`, `v1.3`, `v1.0.1` the earlier releases).
 The build is reproducible, so you can confirm the APK contains this code and nothing else:
 
 1. Install [Android Studio](https://developer.android.com/studio) (or JDK 17+ and the Android SDK).
-2. Check out the release tag and build it: `git checkout v1.4.1`, then `./gradlew assembleRelease` (`gradlew.bat` on Windows).
+2. Check out the release tag and build it: `git checkout v1.5`, then `./gradlew assembleRelease` (`gradlew.bat` on Windows).
 3. Compare your build with the official APK:
-   `python tools/verify-apk.py MinMap-1.4.1.apk app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk`
+   `python tools/verify-apk.py MinMap-1.5.apk app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk`
 
 It should report every file as identical. Only the signature differs, since only official builds are signed.
 
