@@ -10,6 +10,7 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.net.Uri
+import android.view.KeyEvent
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -111,7 +112,15 @@ import com.example.mapstyleeditor.ui.Place
 import com.example.mapstyleeditor.ui.PoiCard
 import com.example.mapstyleeditor.ui.StyleMenu
 import com.example.mapstyleeditor.ui.SuggestedDrive
+import com.example.mapstyleeditor.ui.VoiceKeys
+import com.example.mapstyleeditor.ui.VoicePanel
+import com.example.mapstyleeditor.ui.rememberVoiceAssistant
+import com.example.mapstyleeditor.voice.VoiceCommand
+import com.example.mapstyleeditor.voice.VoiceDestinations
+import com.example.mapstyleeditor.voice.VoiceOutcome
 import java.util.Calendar
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.mapbox.bindgen.Value
 import com.mapbox.geojson.Feature
 import com.mapbox.geojson.LineString
@@ -169,11 +178,27 @@ class MainActivity : ComponentActivity() {
             intent?.getStringExtra("update_feed")?.let { AppUpdates.feedUrl = it }
         }
         AppUpdates.justUpdatedTo(this)?.let { Toast.makeText(this, "MinMap updated to $it", Toast.LENGTH_LONG).show() }
+        if (intent?.action == Intent.ACTION_VOICE_COMMAND) VoiceKeys.press()
         setContent {
             AppTheme {
                 MapStyleEditorScreen(editor, demo)
             }
         }
+    }
+
+    // MinMap picked as the device's voice command app (e.g. a headset's voice button).
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.action == Intent.ACTION_VOICE_COMMAND) VoiceKeys.press()
+    }
+
+    // A voice or search key (headset, keyboard) that reaches the app: listen.
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if ((keyCode == KeyEvent.KEYCODE_VOICE_ASSIST || keyCode == KeyEvent.KEYCODE_SEARCH) && event.repeatCount == 0) {
+            VoiceKeys.press()
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
     }
 }
 
@@ -559,6 +584,34 @@ private fun MapWithSearch(
     var tappedPoi by remember { mutableStateOf<TappedPoi?>(null) }
     val view = LocalView.current
 
+    // "Navigate to Starbucks" / "stop navigation", by voice.
+    val voiceFinder = remember(MapboxAccount.token) { VoiceDestinations(MapboxAccount.token) { history.all() } }
+    val currentDrive by rememberUpdatedState(drive)
+    val currentOnDrive by rememberUpdatedState(onDrive)
+    val currentEnd by rememberUpdatedState {
+        // Ending here ends Google Maps' navigation too, using its own "Exit navigation" button.
+        runCatching { navInstruction?.exitAction?.send() }
+        endDrive()
+    }
+    val (voice, listen) = rememberVoiceAssistant { command ->
+        when (command) {
+            VoiceCommand.Stop -> withContext(Dispatchers.Main) {
+                if (currentDrive == null) VoiceOutcome.NothingToStop else {
+                    currentEnd()
+                    VoiceOutcome.Stopped
+                }
+            }
+            is VoiceCommand.Navigate -> {
+                val place = voiceFinder.find(command.query, viewport.cameraState?.center ?: live.point, live.point)
+                if (place == null) VoiceOutcome.NotFound(command.query) else withContext(Dispatchers.Main) {
+                    tappedPoi = null
+                    currentOnDrive(place)
+                    VoiceOutcome.Driving(place)
+                }
+            }
+        }
+    }
+
     // The status bar now sits on the map, so its icons follow the map: light icons on dark maps.
     SideEffect {
         (view.context as? Activity)?.window?.let { window ->
@@ -676,11 +729,7 @@ private fun MapWithSearch(
                     following = following,
                     onToggleView = { closeUp = !closeUp },
                     onRecenter = { followKey++ },
-                    onEnd = {
-                        // Ending here ends Google Maps' navigation too, using its own "Exit navigation" button.
-                        runCatching { navInstruction?.exitAction?.send() }
-                        endDrive()
-                    },
+                    onEnd = currentEnd,
                 )
             }
         } else if (tappedPoi != null) {
@@ -719,10 +768,16 @@ private fun MapWithSearch(
                 },
                 near = { viewport.cameraState?.center ?: live.point },
                 here = { live.point },
+                onMic = if (voice.usable) listen else null,
                 // Lifted clear of the Mapbox logo and attribution button along the bottom edge.
                 modifier = Modifier.align(Alignment.BottomCenter).then(bars).padding(bottom = 40.dp),
             )
         }
+        // Above the search bar, or above the drive buttons while driving.
+        VoicePanel(
+            voice, hazeState, darkMap,
+            modifier = Modifier.align(Alignment.BottomCenter).then(bars).padding(start = 12.dp, end = 12.dp, bottom = 104.dp),
+        )
         if (drive == null) {
             // Last, so the menu and its button sit above everything else on the map.
             StyleMenu(editor, hazeState, open = menuOpen, onOpenChange = onMenuOpenChange, modifier = bars)

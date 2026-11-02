@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-29T04:26:46.589Z",
+  "generatedAt": "2026-11-02T21:35:22.000Z",
   "publicSourceSha": null,
-  "mergedCount": 23,
+  "mergedCount": 24,
   "areas": [
     {
       "key": "waymo:atlanta",
@@ -9817,6 +9817,90 @@
               [
                 -104.981532,
                 39.8436663
+              ]
+            ]
+          ]
+        }
+      },
+      "isTestRegion": false,
+      "aliases": []
+    },
+    {
+      "key": "tesla:fort-worth",
+      "provider": "tesla",
+      "slug": "fort-worth",
+      "name": "Fort Worth",
+      "centerLat": 32.77,
+      "centerLng": -97.36,
+      "defaultZoom": 11,
+      "boundary": {
+        "type": "Feature",
+        "properties": {
+          "provider": "tesla",
+          "name": "Fort Worth, TX",
+          "source": "traced_tesla_robotaxi_announcement_map_2026-11-02",
+          "sourceInternalName": "fort_worth",
+          "sourcePolygonCount": 1
+        },
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                -97.320454,
+                32.872678
+              ],
+              [
+                -97.297681,
+                32.872574
+              ],
+              [
+                -97.297714,
+                32.860657
+              ],
+              [
+                -97.25217,
+                32.860447
+              ],
+              [
+                -97.252364,
+                32.790065
+              ],
+              [
+                -97.292516,
+                32.720198
+              ],
+              [
+                -97.293544,
+                32.659343
+              ],
+              [
+                -97.463257,
+                32.662053
+              ],
+              [
+                -97.487118,
+                32.734571
+              ],
+              [
+                -97.477962,
+                32.78264
+              ],
+              [
+                -97.388899,
+                32.82647
+              ],
+              [
+                -97.354,
+                32.8613
+              ],
+              [
+                -97.320486,
+                32.861146
+              ],
+              [
+                -97.320454,
+                32.872678
               ]
             ]
           ]

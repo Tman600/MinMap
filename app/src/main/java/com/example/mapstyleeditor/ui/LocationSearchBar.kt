@@ -87,6 +87,8 @@ fun LocationSearchBar(
     near: () -> Point?,
     /** Where you are, for the distances shown. */
     here: () -> Point?,
+    /** "Where to?" by voice; null hides the mic (nothing to listen with). */
+    onMic: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var query by remember { mutableStateOf("") }
@@ -257,6 +259,12 @@ fun LocationSearchBar(
                     }),
                     modifier = Modifier.fillMaxWidth(),
                 )
+            }
+            if (query.isEmpty() && onMic != null) {
+                Box(
+                    Modifier.size(40.dp).clip(RoundedCornerShape(50)).clickable(onClick = onMic),
+                    contentAlignment = Alignment.Center,
+                ) { MicGlyph(ink.copy(alpha = 0.7f), Modifier.size(20.dp)) }
             }
             // The learned destination for right now, sitting at the right of the bar: tap to drive
             // there, long-press to stop suggesting it. It never starts anything on its own.

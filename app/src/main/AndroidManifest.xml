@@ -16,6 +16,8 @@
     <!-- Android Auto: navigation templates and drawing the map on the car screen (see car/MinMapCarService). -->
     <uses-permission android:name="androidx.car.app.NAVIGATION_TEMPLATES" />
     <uses-permission android:name="androidx.car.app.ACCESS_SURFACE" />
+    <!-- "Navigate to..." by voice. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!-- The Google Maps navigation intent is matched by package, so Maps must be visible to us. -->
     <queries>
@@ -24,6 +26,10 @@
         <package android:name="com.waymo.carapp" />
         <package android:name="com.tesla.riders" />
         <package android:name="com.zoox.android.ride" />
+        <!-- The phone's speech recognizer, for voice commands (Android 11+ hides it otherwise). -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
     </queries>
 
     <application

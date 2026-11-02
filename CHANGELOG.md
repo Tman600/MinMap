@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.6
+
+- **Voice:** tap the mic in the search bar and say where to, like "navigate to Starbucks" or "take
+  me to the nearest gas station", and MinMap starts the drive. "Stop navigation" ends it. A place
+  you've driven to before is matched by name without a search. A headset's voice button works too.
+- **Android Auto: when MinMap doesn't show up in the car's app list.** Android Auto now only lists
+  apps it believes came from Google Play, even with "Unknown sources" on, and MinMap installs its
+  own updates. To make it show, install the APK from a computer with the Play Store named as the
+  installer (your data is kept):
+  `adb install -r -i com.android.vending MinMap-1.6.apk`. An update installed from inside MinMap
+  undoes this, so repeat it after updating.
+- **Tesla Fort Worth** (launched 2 November, about 143 sq mi from Saginaw to Benbrook) is in the
+  built-in robotaxi areas, traced from Tesla's announcement map.
+
 ## 1.5
 
 MinMap's biggest release yet.
