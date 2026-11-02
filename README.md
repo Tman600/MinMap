@@ -11,14 +11,14 @@ From version 1.3, MinMap keeps itself up to date: the **Updates** tab in its set
 Each release lists the SHA-256 checksum of its APK, also in [`SHA256SUMS`](SHA256SUMS). The latest:
 
 ```
-074999559299660d29e18aa9f2380e50fc42f516f0e3899424723de831acac31  MinMap-1.5.apk
+8594b22b5c4d99b8e7d06e828c9f15ee8af1949a78588587e30a2b6276737a97  MinMap-1.6.apk
 ```
 
 Check it after downloading:
 
-- Windows: `certutil -hashfile MinMap-1.5.apk SHA256`
-- macOS: `shasum -a 256 MinMap-1.5.apk`
-- Linux: `sha256sum MinMap-1.5.apk`
+- Windows: `certutil -hashfile MinMap-1.6.apk SHA256`
+- macOS: `shasum -a 256 MinMap-1.6.apk`
+- Linux: `sha256sum MinMap-1.6.apk`
 
 Official releases are signed with the MinMap key. The signing certificate's SHA-256 fingerprint is:
 
